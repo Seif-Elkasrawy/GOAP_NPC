@@ -10,6 +10,7 @@
 	"DocsURL": "https://narratech.com/project/goap-npc",
 	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/40c1ae5f1b284d70bcc863bc98ccf68d",
 	"SupportURL": "https://www.unrealengine.com/marketplace/en-US/product/goap-npc-goal-oriented-action-planning-for-non-player-characters",
+	"EngineVersion": "5.7.0",
 	"CanContainContent": false,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
@@ -19,7 +20,7 @@
 			"Name": "GOAPNPC",
 			"Type": "Runtime",
 			"LoadingPhase": "Default",
-			"WhitelistPlatforms": [
+			"PlatformAllowList": [
 				"Win64"
 			]
 		}
