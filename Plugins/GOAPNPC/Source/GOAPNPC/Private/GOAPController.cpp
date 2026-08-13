@@ -1,8 +1,8 @@
 /**
 	GOAP NPC: Goal-Oriented Action Planning for Non-Player Characters
-	Copyright © 2022 Narratech Laboratories
+	Copyright ï¿½ 2022 Narratech Laboratories
 
-	Authors: Diego Romero-Hombrebueno Santos, Mario Sánchez Blanco, José Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
+	Authors: Diego Romero-Hombrebueno Santos, Mario Sï¿½nchez Blanco, Josï¿½ Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
 	Website: https://narratech.com/project/goap-npc/
  */
 #include "GOAPController.h"
@@ -17,8 +17,9 @@ void AGOAPController::BeginPlay()
 	for (auto i = 0; i < actions.Num(); ++i)
 	{
 		if (actions[i] != NULL) {
-			FString aux = actions[i].GetDefaultObject()->GetName();
-			auxActions.Push(actions[i].GetDefaultObject());
+			UGOAPAction* actionInstance = NewObject<UGOAPAction>(this, actions[i]);
+			FString aux = actionInstance->GetName();
+			auxActions.Push(actionInstance);
 		}
 	}
 
@@ -46,7 +47,7 @@ void AGOAPController::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("Undefined Current World in GOAPController."));
 
 	if (wsDesiredWorld.isEmpty())
-		UE_LOG(LogTemp, Warning, TEXT("Undefined Desired World in GOAPController.")); // This is normal in the first execution, isn´t it?
+		UE_LOG(LogTemp, Warning, TEXT("Undefined Desired World in GOAPController.")); // This is normal in the first execution, isnï¿½t it?
 
 	Super::BeginPlay();
 }
@@ -68,7 +69,7 @@ bool AGOAPController::executeGOAP()
 		if (plan.Num() > 0)
 		{
 			// Gets next action to perform.
-			UGOAPAction* aux = plan[plan.Num() - 1];
+			UGOAPAction* aux = plan[0];
 
 			// Performs an action and when it's done its effects are applied, changing the current world state.
 			if (aux->doAction(GetPawn()))
@@ -85,6 +86,12 @@ bool AGOAPController::executeGOAP()
 
 bool AGOAPController::generatePlan()
 {
+	if (planner == nullptr)
+	{
+		UE_LOG(LogTemp, Error, TEXT("GOAPController: planner is null (BeginPlay may not have run yet on this controller)."));
+		return false;
+	}
+
 	if (auxActions.Num() > 0 && !wsCurrentWorld.isEmpty() && !wsDesiredWorld.isEmpty())
 	{
 		// Creates the cheapest plan of actions.

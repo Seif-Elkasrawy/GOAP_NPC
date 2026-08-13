@@ -1,8 +1,8 @@
 /**
 	GOAP NPC: Goal-Oriented Action Planning for Non-Player Characters
-	Copyright © 2022 Narratech Laboratories
+	Copyright Â© 2022 Narratech Laboratories
 
-	Authors: Diego Romero-Hombrebueno Santos, Mario Sánchez Blanco, José Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
+	Authors: Diego Romero-Hombrebueno Santos, Mario SÃ¡nchez Blanco, JosÃ© Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
 	Website: https://narratech.com/project/goap-npc/
  */
 #pragma once
@@ -10,7 +10,7 @@
 #include "GOAPPlanner.h"
 #include "CoreMinimal.h"
 #include "AIController.h"
-#include "Engine.h" // To avoid GOAPController.cpp(93): error C2065: 'GEngine': undeclared identifier
+#include "Engine/Engine.h"
 #include "GOAPController.generated.h"
 
 
@@ -56,8 +56,10 @@ private:
 
 	GOAPPlanner* planner;
 
+	UPROPERTY()
 	TArray<UGOAPAction*> auxActions;
 
+	UPROPERTY()
 	TArray<UGOAPAction*> plan;
 
 	GOAPWorldState wsCurrentWorld;
