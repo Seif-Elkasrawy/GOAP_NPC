@@ -1,8 +1,8 @@
 /**
 	GOAP NPC: Goal-Oriented Action Planning for Non-Player Characters
-	Copyright © 2022 Narratech Laboratories
+	Copyright ï¿½ 2022 Narratech Laboratories
 
-	Authors: Diego Romero-Hombrebueno Santos, Mario Sánchez Blanco, José Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
+	Authors: Diego Romero-Hombrebueno Santos, Mario Sï¿½nchez Blanco, Josï¿½ Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
 	Website: https://narratech.com/project/goap-npc/
  */
 #pragma once

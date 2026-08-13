@@ -1,8 +1,8 @@
 /**
 	GOAP NPC: Goal-Oriented Action Planning for Non-Player Characters
-	Copyright © 2022 Narratech Laboratories
+	Copyright ï¿½ 2022 Narratech Laboratories
 
-	Authors: Diego Romero-Hombrebueno Santos, Mario Sánchez Blanco, José Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
+	Authors: Diego Romero-Hombrebueno Santos, Mario Sï¿½nchez Blanco, Josï¿½ Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
 	Website: https://narratech.com/project/goap-npc/
  */
 #include "GOAPPlanner.h"
@@ -49,7 +49,7 @@ GOAPNode GOAPPlanner::lowestFinList(const TArray<GOAPNode>& opList)
 //	return contains;
 //}
 
-int getIndexInOpenList(GOAPNode node, const TArray<GOAPNode>& list)
+int GOAPPlanner::getIndexInOpenList(GOAPNode node, const TArray<GOAPNode>& list)
 {
 	for (int i = 0; i < list.Num(); ++i)
 	{
@@ -131,6 +131,21 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		closedList.Push(current);
 		int pos = closedList.Num() - 1;
 
+		SubgoalState currentSubgoalForLog = current.getSubgoalState();
+		FString subgoalStr;
+		for (auto atom : currentSubgoalForLog.getAtoms())
+		{
+			subgoalStr += atom.first;
+			subgoalStr += TEXT("=");
+			subgoalStr += atom.second ? TEXT("T") : TEXT("F");
+			subgoalStr += TEXT(" ");
+		}
+
+		FString actionName = current.getAction() ? current.getAction()->GetName() : TEXT("start");
+
+		UE_LOG(LogTemp, Log, TEXT("GOAP node: action=%s subgoal={ %s} g=%.1f h=%d f=%.1f"),
+			*actionName, *subgoalStr, current.getG(), current.getH(), current.getF());
+
 		// Termination: does the real world already satisfy what this node still requires?
 		if (currentWorld->isIncluded(current.getSubgoalState().getWorldState()))
 		{
@@ -173,7 +188,7 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 	}
 
 	// Reconstruction: last is closest to the real world (first executable
-	// action), start is the goal (last thing accomplished) — last -> start
+	// action), start is the goal (last thing accomplished) ï¿½ last -> start
 	// now produces correct execution order directly.
 	if (goalReached)
 	{
@@ -183,6 +198,12 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 			sol.Push(planNode.getAction());
 			planNode = closedList[planNode.getParent()];
 		}
+	}
+
+	// at the end of generatePlan, before "return sol;"
+	if (!goalReached)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("GOAPPlanner: no plan found (openList empty or maxDepth reached)."));
 	}
 
 	return sol;
