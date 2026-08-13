@@ -1,8 +1,8 @@
 /**
 	GOAP NPC: Goal-Oriented Action Planning for Non-Player Characters
-	Copyright © 2022 Narratech Laboratories
+	Copyright Â© 2022 Narratech Laboratories
 
-	Authors: Diego Romero-Hombrebueno Santos, Mario Sánchez Blanco, José Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
+	Authors: Diego Romero-Hombrebueno Santos, Mario SÃ¡nchez Blanco, JosÃ© Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
 	Website: https://narratech.com/project/goap-npc/
  */
 #pragma once
@@ -78,6 +78,11 @@ public:
 	// Search all actors of targetsType class located in the world.
 	UFUNCTION(BlueprintCallable, Category = GOAPAction)
 		TArray<AActor*> getTargetsList(APawn* p);
+
+	// Finds the nearest actor of targetsType to p, excluding p itself,
+	// and sets it as this action's target. Returns false if none found.
+	UFUNCTION(BlueprintCallable, Category = GOAPAction)
+		bool findClosestTarget(APawn* p);
 
 	// Optional function to check if it's possible to perform the action.
 	UFUNCTION(BlueprintImplementableEvent, Category = GOAPAction)

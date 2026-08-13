@@ -1,8 +1,8 @@
 /**
 	GOAP NPC: Goal-Oriented Action Planning for Non-Player Characters
-	Copyright © 2022 Narratech Laboratories
+	Copyright Â© 2022 Narratech Laboratories
 
-	Authors: Diego Romero-Hombrebueno Santos, Mario Sánchez Blanco, José Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
+	Authors: Diego Romero-Hombrebueno Santos, Mario SÃ¡nchez Blanco, JosÃ© Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
 	Website: https://narratech.com/project/goap-npc/
  */
 #include "GOAPAction.h"
@@ -30,6 +30,33 @@ TArray<AActor*> UGOAPAction::getTargetsList(APawn* p)
 	// AVOID CRASHES, checking if targetsType is empty or not!
 	UGameplayStatics::GetAllActorsOfClass(p->GetWorld(), targetsType, actorsFound);
 	return actorsFound;
+}
+
+bool UGOAPAction::findClosestTarget(APawn* p)
+{
+	TArray<AActor*> candidates = getTargetsList(p);
+
+	AActor* best = nullptr;
+	float bestDistSq = TNumericLimits<float>::Max();
+
+	for (AActor* candidate : candidates)
+	{
+		if (candidate == nullptr || candidate == p)
+			continue; // skip invalid entries and exclude self
+
+		float distSq = FVector::DistSquared(p->GetActorLocation(), candidate->GetActorLocation());
+		if (distSq < bestDistSq)
+		{
+			bestDistSq = distSq;
+			best = candidate;
+		}
+	}
+
+	if (best == nullptr)
+		return false;
+
+	setTarget(best);
+	return true;
 }
 
 bool UGOAPAction::operator==(UGOAPAction& a)
