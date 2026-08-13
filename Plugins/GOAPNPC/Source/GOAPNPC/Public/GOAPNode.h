@@ -8,6 +8,7 @@
 #pragma once
 
 #include "GOAPAction.h"
+#include "SubgoalState.h"
 #include "CoreMinimal.h"
 
  /**
@@ -17,7 +18,7 @@ class GOAPNPC_API GOAPNode
 {
 private:
 
-	GOAPWorldState world;
+	SubgoalState subgoalState;
 
 	int h;
 
@@ -46,7 +47,7 @@ public:
 
 	int getParent();
 
-	GOAPWorldState getWorld();
+	SubgoalState getSubgoalState();
 
 	UGOAPAction* getAction();
 
@@ -60,7 +61,7 @@ public:
 
 	void setParent(int p);
 
-	void setWorld(GOAPWorldState w);
+	void setSubgoalState(SubgoalState s);
 
 	void setAction(UGOAPAction* a);
 };
