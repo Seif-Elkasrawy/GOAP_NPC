@@ -34,45 +34,76 @@ GOAPNode GOAPPlanner::lowestFinList(const TArray<GOAPNode>& opList)
 
 	return node;
 }
+//
+//bool containsNode(GOAPNode node, const TArray<GOAPNode>& list)
+//{
+//	bool contains = false;
+//	for (GOAPNode n : list)
+//	{
+//		if (n == node)
+//		{
+//			contains = true;
+//			break;
+//		}
+//	}
+//	return contains;
+//}
 
-bool containsNode(GOAPNode node, const TArray<GOAPNode>& list)
+int getIndexInOpenList(GOAPNode node, const TArray<GOAPNode>& list)
 {
-	bool contains = false;
-	for (GOAPNode n : list)
+	for (int i = 0; i < list.Num(); ++i)
 	{
-		if (n == node)
-		{
-			contains = true;
-			break;
-		}
+		if (list[i] == node)
+			return i;
 	}
-	return contains;
+	return -1;
 }
 
 TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, const TArray<UGOAPAction*>& vActions, APawn* p)
 {
 	TArray<GOAPNode> adjacentNodes;
-	GOAPNode adjacent;
-	GOAPWorldState world;
+	SubgoalState currentSubgoal = current.getSubgoalState();
 
 	for (int i = 0; i < vActions.Num(); ++i)
 	{
-		// Checks if the action can be performed from the current world.
-		const bool bPredoncitionsAreMet = current.getWorld().isIncluded(vActions[i]->getPreconditions());
-		// Checks if the action is the same as the current one. (This can be deleted if you want your AI to perform the same action consecutively).
-		const bool bSameActionAsBefore = current.getAction() == vActions[i];
-		// Checks the procedural precondition of the action.
-		const bool bProceduralPreconditionFulfilled = vActions[i]->checkProceduralPrecondition(p);
+		UGOAPAction* action = vActions[i];
 
-		if (bPredoncitionsAreMet && !bSameActionAsBefore && bProceduralPreconditionFulfilled)
+		// Checks if the action is the same as the current one. (This can be deleted if you want your AI to perform the same action consecutively).
+		const bool bSameActionAsBefore = current.getAction() == action;
+		if (bSameActionAsBefore)
+			continue;
+		// Checks the procedural precondition of the action.
+		const bool bProceduralPreconditionFulfilled = action->checkProceduralPrecondition(p);
+		if (!bProceduralPreconditionFulfilled)
+			continue;
+
+		SubgoalState newSubgoal = currentSubgoal;
+		bool resolvedSomething = false;
+
+		// Single pass: match action's effects against subgoal atoms,
+		// subtract on match, and track whether this action qualifies at all.
+		GOAPWorldState effects = action->getEffects();
+		for (auto requirement : currentSubgoal.getAtoms()) 
 		{
-			world = current.getWorld(); // Saves the current world.
-			world.joinWorldState(vActions[i]->getEffects()); // Applies effects of the action to the saved world.
-			adjacent.setWorld(world); // Sets the adjacet node's world.
-			adjacent.setAction(vActions[i]); // Sets the adjacet node's action. 
-			adjacentNodes.Push(adjacent); // Includes the adjacent node in the list.
+			auto effectAtoms = effects.getAtoms();
+			auto it = effectAtoms.find(requirement.first);
+			if (it != effectAtoms.end() && it->second == requirement.second)
+			{
+				newSubgoal.removeAtom(requirement.first);
+				resolvedSomething = true;
+			}
 		}
+		if (!resolvedSomething)
+			continue; // doesn't resolve anything we still need
+
+		newSubgoal.mergeUnsatisfiedRequirements(action->getPreconditions(), *currentWorld);
+
+		GOAPNode adjacent(action); // constructor sets g = action's cost, h = 0
+		adjacent.setSubgoalState(newSubgoal);
+		adjacentNodes.Push(adjacent);
+
 	}
+
 	return adjacentNodes;
 }
 
@@ -80,11 +111,15 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 {
 	TArray<UGOAPAction*> sol;
 
-	GOAPNode start; start.setWorld(*currentWorld); start.setParent(-1);
+	GOAPNode start;
+	start.setSubgoalState(SubgoalState(*goal)); // goal seeds the root
+	start.setParent(-1);
+
 	GOAPNode last;
 	openList.Empty();
 	closedList.Empty();
 	openList.Push(start);
+
 	bool continues = true;
 	bool goalReached = false;
 
@@ -96,33 +131,37 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		closedList.Push(current);
 		int pos = closedList.Num() - 1;
 
-		// When the current plan reaches the goal, the plan stops.
-		if (current.getWorld().isIncluded(*goal))
+		// Termination: does the real world already satisfy what this node still requires?
+		if (currentWorld->isIncluded(current.getSubgoalState().getWorldState()))
 		{
 			last = current;
 			continues = false;
 			goalReached = true;
 			break;
 		}
+
 		// Get adjacents of actual node.
 		TArray<GOAPNode> adjacents = getAdjacent(current, actions, p);
 
 		// Explore adjacent nodes.
 		for (GOAPNode& adjacent : adjacents)
 		{
+			adjacent.setG(current);
+
+			int existingIndex = getIndexInOpenList(adjacent, openList);
+
 			// If the adjacent node isn't in the open list, it is added.
-			if (!containsNode(adjacent, openList))
+			if (existingIndex == -1)
 			{
 				adjacent.setParent(pos);
-				adjacent.setH(current.getWorld());
-				adjacent.setG(current);
+				adjacent.setH(*currentWorld);
 				openList.Push(adjacent);
 			}
 			// If current path to adjacent node is cheaper than the previous one, the path changes. 
-			else if (adjacent.getG() > adjacent.getG() + current.getG())
+			else if (adjacent.getG() < openList[existingIndex].getG())
 			{
-				adjacent.setParent(pos);
-				adjacent.setG(current);
+				openList[existingIndex].setParent(pos);
+				openList[existingIndex].setG(current);
 			}
 		}
 
@@ -133,7 +172,9 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		}
 	}
 
-	// Extracts the plan's path in reverse from closed list and copy it to a new variable.
+	// Reconstruction: last is closest to the real world (first executable
+	// action), start is the goal (last thing accomplished) — last -> start
+	// now produces correct execution order directly.
 	if (goalReached)
 	{
 		GOAPNode planNode = last;
@@ -143,6 +184,7 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 			planNode = closedList[planNode.getParent()];
 		}
 	}
+
 	return sol;
 }
 
