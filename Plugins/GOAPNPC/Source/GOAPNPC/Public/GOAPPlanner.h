@@ -51,11 +51,16 @@ public:
 
 	GOAPPlanner(GOAPWorldState* c, GOAPWorldState* g, const TArray<UGOAPAction*>& a);
 
-	// Get the node with lowest F's value. 
-	// F = G (real cost at this state) + H (estimated cost from this state).
-	GOAPNode lowestFinList(const TArray<GOAPNode>& opList);
+	// lowestFinList REMOVED - openList is now a min-heap by F score
+	// (see generatePlan), popped directly via TArray::HeapPop.
 
-	int getIndexInOpenList(GOAPNode node, const TArray<GOAPNode>& list);
+	// Returns the index of node within list (matched via GOAPNode's
+	// operator==, i.e. same action + subgoalState), or -1 if absent.
+	// Used in generatePlan() to detect stale duplicate entries popped
+	// from the open-list heap that were already expanded once before
+	// a cheaper path superseded them.
+
+	int getIndexInList(GOAPNode node, const TArray<GOAPNode>& list);
 
 	// Returns the nodes adjacent to the current one.
 	TArray<GOAPNode> getAdjacent(GOAPNode current, APawn* p);
