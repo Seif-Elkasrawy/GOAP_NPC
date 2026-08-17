@@ -11,11 +11,31 @@ GOAPPlanner::GOAPPlanner() {}
 
 GOAPPlanner::~GOAPPlanner() {}
 
+static FString MakeEffectKey(const FString& name, bool value)
+{
+	return name + (value ? TEXT("_T") : TEXT("_F"));
+}
+
+void GOAPPlanner::indexAction(UGOAPAction* action)
+{
+	GOAPWorldState effects = action->getEffects();
+	for (auto& effectAtom : effects.getAtoms())
+	{
+		effectIndex.FindOrAdd(MakeEffectKey(effectAtom.first, effectAtom.second)).AddUnique(action);
+	}
+}
+
 GOAPPlanner::GOAPPlanner(GOAPWorldState* c, GOAPWorldState* g, const TArray<UGOAPAction*>& a)
 {
 	currentWorld = c;
 	goal = g;
 	actions = a;
+
+	effectIndex.Empty();
+	for (UGOAPAction* action : actions)
+	{
+		indexAction(action);
+	}
 }
 
 GOAPNode GOAPPlanner::lowestFinList(const TArray<GOAPNode>& opList)
@@ -59,29 +79,44 @@ int GOAPPlanner::getIndexInOpenList(GOAPNode node, const TArray<GOAPNode>& list)
 	return -1;
 }
 
-TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, const TArray<UGOAPAction*>& vActions, APawn* p)
+TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, APawn* p)
 {
 	TArray<GOAPNode> adjacentNodes;
 	SubgoalState currentSubgoal = current.getSubgoalState();
 
-	for (int i = 0; i < vActions.Num(); ++i)
+	// Only actions whose effects can satisfy at least one atom this
+	// subgoal still needs are candidates - looked up via the precomputed
+	// index instead of scanning every registered action.
+	TArray<UGOAPAction*> candidates;
+	for (auto& requirement : currentSubgoal.getAtoms())
 	{
-		UGOAPAction* action = vActions[i];
+		if (const TArray<UGOAPAction*>* found = effectIndex.Find(MakeEffectKey(requirement.first, requirement.second)))
+		{
+			for (UGOAPAction* action : *found)
+			{
+				candidates.AddUnique(action);
+			}
+		}
+	}
+	for (UGOAPAction* action : candidates)
+	{
 
 		// Checks if the action is the same as the current one. (This can be deleted if you want your AI to perform the same action consecutively).
 		const bool bSameActionAsBefore = current.getAction() == action;
 		if (bSameActionAsBefore)
 			continue;
+
 		// Checks the procedural precondition of the action.
 		const bool bProceduralPreconditionFulfilled = action->checkProceduralPrecondition(p);
 		if (!bProceduralPreconditionFulfilled)
 			continue;
 
 		SubgoalState newSubgoal = currentSubgoal;
-		bool resolvedSomething = false;
 
-		// Single pass: match action's effects against subgoal atoms,
-		// subtract on match, and track whether this action qualifies at all.
+		// Membership in `candidates` already guarantees this action
+		// resolves at least one atom, so there's no separate
+		// "resolvedSomething" check needed here anymore - the index
+		// enforces that invariant by construction.
 		GOAPWorldState effects = action->getEffects();
 		for (auto requirement : currentSubgoal.getAtoms()) 
 		{
@@ -90,11 +125,8 @@ TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, const TArray<UGOAPAc
 			if (it != effectAtoms.end() && it->second == requirement.second)
 			{
 				newSubgoal.removeAtom(requirement.first);
-				resolvedSomething = true;
 			}
 		}
-		if (!resolvedSomething)
-			continue; // doesn't resolve anything we still need
 
 		newSubgoal.mergeUnsatisfiedRequirements(action->getPreconditions(), *currentWorld);
 
@@ -156,7 +188,7 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		}
 
 		// Get adjacents of actual node.
-		TArray<GOAPNode> adjacents = getAdjacent(current, actions, p);
+		TArray<GOAPNode> adjacents = getAdjacent(current, p);
 
 		// Explore adjacent nodes.
 		for (GOAPNode& adjacent : adjacents)
@@ -212,6 +244,7 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 void GOAPPlanner::addAction(UGOAPAction* a)
 {
 	this->actions.Push(a);
+	indexAction(a);
 }
 
 GOAPWorldState GOAPPlanner::getGoal()

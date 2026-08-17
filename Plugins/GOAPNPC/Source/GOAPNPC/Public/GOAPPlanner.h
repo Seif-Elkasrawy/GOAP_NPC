@@ -35,6 +35,14 @@ private:
 	GOAPWorldState* lastWorld = nullptr;
 	TArray<UGOAPAction*> lastPlan;
 
+	// Precomputed: atom key ("name_T"/"name_F") -> actions whose effects
+	// can satisfy it. Built once from `actions`, avoids scanning every
+	// registered action (and calling its checkProceduralPrecondition)
+	// on every node expansion.
+	TMap<FString, TArray<UGOAPAction*>> effectIndex;
+
+	void indexAction(UGOAPAction* action);
+
 public:
 
 	GOAPPlanner();
@@ -50,7 +58,7 @@ public:
 	int getIndexInOpenList(GOAPNode node, const TArray<GOAPNode>& list);
 
 	// Returns the nodes adjacent to the current one.
-	TArray<GOAPNode> getAdjacent(GOAPNode current, const TArray<UGOAPAction*>& vActions, APawn* p);
+	TArray<GOAPNode> getAdjacent(GOAPNode current, APawn* p);
 
 	// A* algorithm.
 	TArray<UGOAPAction*> generatePlan(APawn* p);
