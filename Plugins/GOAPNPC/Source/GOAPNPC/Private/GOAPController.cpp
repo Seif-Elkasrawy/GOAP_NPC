@@ -9,6 +9,13 @@
 
 #define BToS(b) b ? TEXT("true") : TEXT("false")
 
+static TAutoConsoleVariable<bool> CVarGOAPLogStats(
+	TEXT("GOAP.LogStats"),
+	false,
+	TEXT("If true, logs GOAP planner expansion count and timing on every generatePlan() call."),
+	ECVF_Default
+);
+
 AGOAPController::AGOAPController() {}
 
 void AGOAPController::BeginPlay()
@@ -95,7 +102,15 @@ bool AGOAPController::generatePlan()
 	if (auxActions.Num() > 0 && !wsCurrentWorld.isEmpty() && !wsDesiredWorld.isEmpty())
 	{
 		// Creates the cheapest plan of actions.
+		double startTime = FPlatformTime::Seconds();
 		plan = planner->generatePlan(GetPawn());
+		double elapsedMs = (FPlatformTime::Seconds() - startTime) * 1000.0;
+
+		if (CVarGOAPLogStats.GetValueOnGameThread())
+		{
+			UE_LOG(LogTemp, Log, TEXT("GOAP benchmark: expansions=%d time=%.4fms"),
+			planner->getLastExpansionCount(), elapsedMs);
+		}
 
 		if (debug && GEngine) debugInfo();
 

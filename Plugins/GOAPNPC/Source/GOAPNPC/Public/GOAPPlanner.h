@@ -32,6 +32,8 @@ private:
 
 	int maxDepth;
 
+	int lastExpansionCount = 0;
+
 	GOAPWorldState* lastWorld = nullptr;
 	TArray<UGOAPAction*> lastPlan;
 
@@ -88,6 +90,8 @@ public:
 	GOAPWorldState getCurrentWorld();
 
 	int getMaxDepth();
+
+	int getLastExpansionCount();
 
 	//SETS
 

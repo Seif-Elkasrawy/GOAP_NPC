@@ -221,7 +221,7 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 	}
 
 	// Reconstruction: last is closest to the real world (first executable
-	// action), start is the goal (last thing accomplished) � last -> start
+	// action), start is the goal (last thing accomplished) last -> start
 	// now produces correct execution order directly.
 	if (goalReached)
 	{
@@ -233,11 +233,12 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		}
 	}
 
-	// at the end of generatePlan, before "return sol;"
 	if (!goalReached)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("GOAPPlanner: no plan found (openList empty or maxDepth reached)."));
 	}
+
+	lastExpansionCount = closedList.Num();
 
 	return sol;
 }
@@ -267,6 +268,11 @@ void GOAPPlanner::setCurrentWorld(GOAPWorldState* w)
 
 int GOAPPlanner::getMaxDepth() {
 	return maxDepth;
+}
+
+int GOAPPlanner::getLastExpansionCount()
+{
+	return lastExpansionCount;
 }
 
 void GOAPPlanner::setMaxDepth(int md) {
