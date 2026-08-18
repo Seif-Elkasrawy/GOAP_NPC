@@ -21,7 +21,15 @@ void GOAPPlanner::indexAction(UGOAPAction* action)
 	GOAPWorldState effects = action->getEffects();
 	for (auto& effectAtom : effects.getAtoms())
 	{
-		effectIndex.FindOrAdd(MakeEffectKey(effectAtom.first, effectAtom.second)).AddUnique(action);
+		FString key = MakeEffectKey(effectAtom.first, effectAtom.second);
+		effectIndex.FindOrAdd(key).AddUnique(action);
+
+		float cost = action->getCost();
+		float* existing = cheapestCostIndex.Find(key);
+		if (existing == nullptr || cost < *existing)
+		{
+			cheapestCostIndex.Add(key, cost);
+		}
 	}
 }
 
@@ -46,6 +54,28 @@ int GOAPPlanner::getIndexInList(GOAPNode node, const TArray<GOAPNode>& list)
 			return i;
 	}
 	return -1;
+}
+
+float GOAPPlanner::computeHeuristic(SubgoalState subgoal)
+{
+	float cost = 0.f;
+	for (auto& requirement : subgoal.getAtoms())
+	{
+		auto it = currentWorld->getAtoms().find(requirement.first);
+		bool mismatched = (it == currentWorld->getAtoms().end() || it->second != requirement.second);
+		if (!mismatched)
+			continue;
+
+		if (const float* cheapest = cheapestCostIndex.Find(MakeEffectKey(requirement.first, requirement.second)))
+		{
+			cost += *cheapest;
+		}
+		// No known action can produce this atom: contributes 0 rather than
+		// a penalty. Fine while every atom in this demo is reachable; if a
+		// no-plan-found case ever needs diagnosing, this is a spot worth
+		// revisiting (ties into the live debug view in Tier 1C).
+	}
+	return cost;
 }
 
 TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, APawn* p)
@@ -159,7 +189,7 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 
 		FString actionName = current.getAction() ? current.getAction()->GetName() : TEXT("start");
 
-		UE_LOG(LogTemp, Log, TEXT("GOAP node: action=%s subgoal={ %s} g=%.1f h=%d f=%.1f"),
+		UE_LOG(LogTemp, Log, TEXT("GOAP node: action=%s subgoal={ %s} g=%.1f h=%.1f f=%.1f"),
 			*actionName, *subgoalStr, current.getG(), current.getH(), current.getF());
 
 		// Termination: does the real world already satisfy what this node still requires?
@@ -179,7 +209,7 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		{
 			adjacent.setG(current);
 			adjacent.setParent(pos);
-			adjacent.setH(*currentWorld);
+			adjacent.setH(computeHeuristic(adjacent.getSubgoalState()));
 			openList.HeapPush(adjacent, FComparator);
 		}
 

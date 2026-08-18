@@ -41,7 +41,18 @@ private:
 	// on every node expansion.
 	TMap<FString, TArray<UGOAPAction*>> effectIndex;
 
+	// Precomputed alongside effectIndex: atom key -> cheapest cost among
+	// actions that can produce it. Backs computeHeuristic's sum-of-
+	// cheapest-producer-cost estimate.
+	TMap<FString, float> cheapestCostIndex;
+
 	void indexAction(UGOAPAction* action);
+
+	// Sum, over subgoal's atoms not already true in currentWorld, of the
+	// cheapest known cost to produce each one. not strictly admissible
+	// (an action satisfying multiple unmet atoms at once gets its cost
+	// counted once per atom), but a standard, informative relaxation.
+	float computeHeuristic(SubgoalState subgoal);
 
 public:
 
