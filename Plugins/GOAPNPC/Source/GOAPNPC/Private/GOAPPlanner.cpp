@@ -16,6 +16,33 @@ static FString MakeEffectKey(const FString& name, bool value)
 	return name + (value ? TEXT("_T") : TEXT("_F"));
 }
 
+static TAutoConsoleVariable<bool> CVarGOAPLogNodes(
+	TEXT("GOAP.LogNodes"),
+	false,
+	TEXT("If true, logs each node expanded during generatePlan()."),
+	ECVF_Default
+);
+
+static TAutoConsoleVariable<bool> CVarGOAPLogCandidates(
+	TEXT("GOAP.LogCandidates"),
+	false,
+	TEXT("If true, logs why each candidate action in getAdjacent() was accepted or rejected."),
+	ECVF_Default
+);
+
+static FString FormatAtoms(const std::map<FString, bool>& atoms)
+{
+	FString str;
+	for (auto& atom : atoms)
+	{
+		str += atom.first;
+		str += TEXT("=");
+		str += atom.second ? TEXT("T") : TEXT("F");
+		str += TEXT(" ");
+	}
+	return str;
+}
+
 void GOAPPlanner::indexAction(UGOAPAction* action)
 {
 	GOAPWorldState effects = action->getEffects();
@@ -99,16 +126,28 @@ TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, APawn* p)
 	}
 	for (UGOAPAction* action : candidates)
 	{
+		FString actionName = action->GetName();
 
 		// Checks if the action is the same as the current one. (This can be deleted if you want your AI to perform the same action consecutively).
 		const bool bSameActionAsBefore = current.getAction() == action;
-		if (bSameActionAsBefore)
+		if (bSameActionAsBefore) {
+			if (CVarGOAPLogCandidates.GetValueOnGameThread())
+			{
+				UE_LOG(LogTemp, Log, TEXT("GOAP candidate: action=%s REJECTED (same action as parent)"), *actionName);
+			}
 			continue;
+		}
 
 		// Checks the procedural precondition of the action.
 		const bool bProceduralPreconditionFulfilled = action->checkProceduralPrecondition(p);
 		if (!bProceduralPreconditionFulfilled)
+		{
+			if (CVarGOAPLogCandidates.GetValueOnGameThread())
+			{
+				UE_LOG(LogTemp, Log, TEXT("GOAP candidate: action=%s REJECTED (procedural precondition failed)"), *actionName);
+			}
 			continue;
+		}
 
 		SubgoalState newSubgoal = currentSubgoal;
 
@@ -128,6 +167,12 @@ TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, APawn* p)
 		}
 
 		newSubgoal.mergeUnsatisfiedRequirements(action->getPreconditions(), *currentWorld);
+
+		if (CVarGOAPLogCandidates.GetValueOnGameThread())
+		{
+			UE_LOG(LogTemp, Log, TEXT("GOAP candidate: action=%s ACCEPTED cost=%.1f new subgoal={ %s}"),
+				*actionName, action->getCost(), *FormatAtoms(newSubgoal.getAtoms()));
+		}
 
 		GOAPNode adjacent(action); // constructor sets g = action's cost, h = 0
 		adjacent.setSubgoalState(newSubgoal);
@@ -177,20 +222,14 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		closedList.Push(current);
 		int pos = closedList.Num() - 1;
 
-		SubgoalState currentSubgoalForLog = current.getSubgoalState();
-		FString subgoalStr;
-		for (auto atom : currentSubgoalForLog.getAtoms())
+		if (CVarGOAPLogNodes.GetValueOnGameThread())
 		{
-			subgoalStr += atom.first;
-			subgoalStr += TEXT("=");
-			subgoalStr += atom.second ? TEXT("T") : TEXT("F");
-			subgoalStr += TEXT(" ");
+			FString subgoalStr = FormatAtoms(current.getSubgoalState().getAtoms());
+			FString actionName = current.getAction() ? current.getAction()->GetName() : TEXT("start");
+
+			UE_LOG(LogTemp, Log, TEXT("GOAP node: action=%s subgoal={ %s} g=%.1f h=%.1f f=%.1f"),
+				*actionName, *subgoalStr, current.getG(), current.getH(), current.getF());
 		}
-
-		FString actionName = current.getAction() ? current.getAction()->GetName() : TEXT("start");
-
-		UE_LOG(LogTemp, Log, TEXT("GOAP node: action=%s subgoal={ %s} g=%.1f h=%.1f f=%.1f"),
-			*actionName, *subgoalStr, current.getG(), current.getH(), current.getF());
 
 		// Termination: does the real world already satisfy what this node still requires?
 		if (currentWorld->isIncluded(current.getSubgoalState().getWorldState()))
