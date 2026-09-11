@@ -7,8 +7,6 @@
  */
 #include "GOAPController.h"
 
-#define BToS(b) b ? TEXT("true") : TEXT("false")
-
 static TAutoConsoleVariable<bool> CVarGOAPLogStats(
 	TEXT("GOAP.LogStats"),
 	false,
