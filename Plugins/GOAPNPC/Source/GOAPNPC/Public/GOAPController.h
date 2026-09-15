@@ -13,11 +13,15 @@
 #include "Engine/Engine.h"
 #include "GOAPController.generated.h"
 
-
- /**
- * AIController containg the planner, states of the current and desired world, and the list of available actions the AI can perform.
- * Current world and desired world are private for each AI, but it's possible to create a global current world to notify changes to other AIs.
-  */
+/**
+ * AIController that owns a GOAPPlanner, the agent's current and desired
+ * world states, and the set of actions it can perform - the Blueprint-
+ * facing entry point that ties GOAPWorldState, UGOAPAction, and
+ * GOAPPlanner together into a usable AI controller. Current and desired
+ * world state are private per instance; a shared/global current world
+ * across agents would need to be built on top of this rather than
+ * assumed by it.
+ */
 UCLASS()
 class GOAPNPC_API AGOAPController : public AAIController
 {
@@ -27,28 +31,27 @@ public:
 
 	// State of the current world.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
-		TArray<FAtom> currentWorld;
+	TArray<FAtom> currentWorld;
 
 	// State of the world in wich the goal has been achieved.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
-		TArray<FAtom> desiredWorld;
+	TArray<FAtom> desiredWorld;
 
 	// List of actions AI can do.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
-		TArray<TSubclassOf<UGOAPAction>> actions;
-
+	TArray<TSubclassOf<UGOAPAction>> actions;
 
 	// Maximum algorithm depth.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
-		int maxDepth = 100;
+	int maxDepth = 100;
 
 	//Debug info
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
-		bool debug;
+	bool debug;
 
 	//Include controller's name
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
-		bool controller;
+	bool controller;
 	
 
 
@@ -68,50 +71,98 @@ private:
 
 public:
 
+	// Allocated in BeginPlay, never deleted - this class has no destructor
+	// override, so this leaks one GOAPPlanner per controller instance.
 	AGOAPController();
 
+	/**
+	 * Instantiates this controller's actions from actions, loads
+	 * currentWorld/desiredWorld into wsCurrentWorld/wsDesiredWorld, and
+	 * constructs the GOAPPlanner. desiredWorld may legitimately be empty
+	 * here if the goal is meant to be assigned dynamically afterward via
+	 * setGoal/updateGoal, rather than authored on this property directly -
+	 * the resulting warning is informational, not necessarily an error.
+	 */
 	virtual void BeginPlay() override;
 
 	virtual void OnPossess(APawn* pawn) override;
 
 	virtual void Tick(float DeltaSeconds) override;
 
-	// Creates and execute the plan.
+	/**
+	 * Generates a plan (see generatePlan) and, if one exists, performs its
+	 * first action via doAction. On success, applies that action's effects
+	 * to wsCurrentWorld so the next plan is generated against the updated
+	 * world state.
+	 *
+	 * @return True if an action was performed this call.
+	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		bool executeGOAP();
+	bool executeGOAP();
+	
+	/**
+	 * Runs the planner (see GOAPPlanner::generatePlan) against this
+	 * controller's current world, goal, and actions, storing the result in
+	 * plan. Does nothing and returns false if the planner hasn't been
+	 * constructed yet (BeginPlay hasn't run), or if actions/current
+	 * world/goal aren't all set up. Logs benchmark stats if GOAP.LogStats
+	 * is enabled, and shows on-screen plan info if debug is set.
+	 *
+	 * @return True if a plan was generated (even if it's empty - see getPlan).
+	 */
+	UFUNCTION(BlueprintCallable, Category = GOAPController)
+	bool generatePlan();
 
-	// Creates actions plan
+	/** @return The most recently generated plan, ordered for execution. */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		bool generatePlan();
+	TArray<UGOAPAction*> getPlan();
 
-	// Returns the actions that make up the plan.
+	/**
+	 * Replaces this controller's goal entirely with newGoal.
+	 *
+	 * @param newGoal The atoms defining the new goal state.
+	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		TArray<UGOAPAction*> getPlan();
+	void setGoal(const TArray<FAtom>& newGoal);
 
-	// Sets the goal of the AI, this function can also be used to change the goal.
+	/**
+	 * Adds atoms to the current goal, or overwrites their values if atoms
+	 * of the same name already exist. Unlike setGoal, does not clear
+	 * existing goal atoms first.
+	 *
+	 * @param atoms The atoms to add or overwrite in the goal.
+	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		void setGoal(const TArray<FAtom>& newGoal);
+	void updateGoal(const TArray<FAtom>& atoms);
+	
+	/**
+	 * Replaces this controller's current world state entirely with
+	 * newCurrentWorld.
+	 *
+	 * @param newCurrentWorld The atoms defining the new current world state.
+	 */
+	UFUNCTION(BlueprintCallable, Category = GOAPController)
+	void setCurrentWorld(const TArray<FAtom>& newCurrentWorld);
 
-	// Adds or modifies atoms from the desired world state. Atoms already existing in the desired world state are modified by new input values.
+	/**
+	 * Adds atoms to the current world state, or overwrites their values if
+	 * atoms of the same name already exist. Unlike setCurrentWorld, does
+	 * not clear existing atoms first.
+	 *
+	 * @param atoms The atoms to add or overwrite in the current world state.
+	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		void updateGoal(const TArray<FAtom>& atoms);
+	void updateCurrentWorld(const TArray<FAtom>& atoms);
 
-	// Sets the current world state of the AI, this function can also be used to change the current world state.
+	/** @return This controller's current world state, as an array of atoms. */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		void setCurrentWorld(const TArray<FAtom>& newCurrentWorld);
+	TArray<FAtom> getCurrentWorldStateAtoms();
 
-	// Adds or modifies atoms from the current world state. Atoms already existing in the current world state are modified by new input values.
+	/** @return This controller's goal state, as an array of atoms. */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		void updateCurrentWorld(const TArray<FAtom>& atoms);
-
-	// Returns the current world state atoms.
-	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		TArray<FAtom> getCurrentWorldStateAtoms();
-
-	// Returns the desired world state atoms.
-	UFUNCTION(BlueprintCallable, Category = GOAPController)
-		TArray<FAtom> getDesiredWorldStateAtoms();
+	TArray<FAtom> getDesiredWorldStateAtoms();
 
 private:
+	/** Shows the current plan on-screen via GEngine::AddOnScreenDebugMessage, when debug is set. */
 	void debugInfo();
 };
