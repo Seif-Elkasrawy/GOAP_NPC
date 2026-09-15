@@ -71,16 +71,6 @@ public:
 	 */
 	void removeAtom(FString name);
 
-	/**
-	 * Adds a requirement atom, or overwrites its value if a requirement of
-	 * the same name already exists. Unlike mergeUnsatisfiedRequirements,
-	 * this does not check against the real world first.
-	 *
-	 * @param name The atom's predicate name.
-	 * @param value The atom's required truth value.
-	 */
-	void set(FString name, bool value);
-
 	/** @return This subgoal's full set of (name, value) requirement atoms. */
 	const std::map<FString, bool>& getAtoms();
 

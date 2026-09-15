@@ -38,11 +38,6 @@ void SubgoalState::removeAtom(FString name)
 	requirements.setAtoms(atoms);
 }
 
-void SubgoalState::set(FString name, bool value)
-{
-	requirements.addAtom(name, value);
-}
-
 const std::map<FString, bool>& SubgoalState::getAtoms()
 {
 	return requirements.getAtoms();

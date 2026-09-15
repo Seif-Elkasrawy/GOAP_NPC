@@ -27,7 +27,6 @@ void UGOAPAction::create_P_E()
 TArray<AActor*> UGOAPAction::getTargetsList(APawn* p)
 {
 	TArray<AActor*> actorsFound;
-	// AVOID CRASHES, checking if targetsType is empty or not!
 	UGameplayStatics::GetAllActorsOfClass(p->GetWorld(), targetsType, actorsFound);
 	return actorsFound;
 }

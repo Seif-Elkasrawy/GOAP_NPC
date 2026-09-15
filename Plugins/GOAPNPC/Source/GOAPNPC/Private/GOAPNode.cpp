@@ -77,10 +77,3 @@ void GOAPNode::setParent(int p)
 {
 	this->parent = p;
 }
-
-void GOAPNode::setAction(UGOAPAction* a)
-{
-	this->h = 0;
-	this->g = a->getCost();
-	this->action = a;
-}
