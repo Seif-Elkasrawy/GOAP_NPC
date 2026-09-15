@@ -57,7 +57,8 @@ public:
 
 private:
 
-	GOAPPlanner* planner;
+	// Allocated in BeginPlay, deleted in ~AGOAPController.
+	GOAPPlanner* planner = nullptr;
 
 	UPROPERTY()
 	TArray<UGOAPAction*> auxActions;
@@ -71,10 +72,8 @@ private:
 
 public:
 
-	// Allocated in BeginPlay, never deleted - this class has no destructor
-	// override, so this leaks one GOAPPlanner per controller instance.
 	AGOAPController();
-
+	virtual ~AGOAPController() override;
 	/**
 	 * Instantiates this controller's actions from actions, loads
 	 * currentWorld/desiredWorld into wsCurrentWorld/wsDesiredWorld, and
