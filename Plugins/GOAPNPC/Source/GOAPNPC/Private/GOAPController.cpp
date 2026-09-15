@@ -16,6 +16,12 @@ static TAutoConsoleVariable<bool> CVarGOAPLogStats(
 
 AGOAPController::AGOAPController() {}
 
+AGOAPController::~AGOAPController()
+{
+	delete planner;
+	planner = nullptr;
+}
+
 void AGOAPController::BeginPlay()
 {
 	// Loads actions.
