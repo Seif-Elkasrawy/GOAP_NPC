@@ -25,6 +25,15 @@ struct FSquadTask
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadTask)
 	float priority = 0.f;
 
+	/**
+ * Where this task is actually happening in the world. Assignment
+ * picks the nearest idle agent to THIS point, not to the coordinator -
+ * a coordinator sitting far from both key locations should not bias
+ * assignment toward whichever agent happens to be near it.
+ */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadTask)
+	FVector location = FVector::ZeroVector;
+
 	/** Runtime only - which agent currently owns this task, if any. */
 	UPROPERTY()
 	AGOAPController* assignedTo = nullptr;

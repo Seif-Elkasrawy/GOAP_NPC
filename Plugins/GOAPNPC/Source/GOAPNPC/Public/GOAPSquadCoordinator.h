@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "SquadTask.h"
+#include "GOAPBroadcastable.h"
 #include "GOAPSquadCoordinator.generated.h"
 
 class AGOAPController;
@@ -25,11 +26,27 @@ public:
 	TArray<FSquadTask> tasks;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
-	TArray<AGOAPController*> squadMembers;
+	TArray<APawn*> squadMembers;
+
+	/**
+	 * Any objects the coordinator should watch and, once each reports
+	 * IsConditionMet(), announce to the whole squad. Fully generic - a
+	 * door, a vault, a car, anything implementing IGOAPBroadcastable.
+	 * The plugin puts no constraint on what these are.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
+	TArray<AActor*> broadcastObjects;
 
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void BeginPlay() override;
+
+	AGOAPSquadCoordinator();
 
 private:
+
+	/** Objects already announced this run, so each is broadcast to the squad exactly once. */
+	UPROPERTY()
+	TArray<UObject*> announcedObjects;
 
 	/**
 	 * Greedily assigns unclaimed tasks, highest priority first, to the
@@ -45,6 +62,15 @@ private:
 	 * all satisfied is marked complete and its agent freed for reassignment.
 	 */
 	void CheckTaskCompletion();
+
+	/**
+	 * For each entry in broadcastObjects not yet announced: if
+	 * IsConditionMet() is true, pushes GetBroadcastAtom() into every
+	 * squad member's world state via updateCurrentWorld, and marks it
+	 * announced. Purely a belief broadcast - reads the object, never
+	 * writes to it, and has no idea what kind of object it actually is.
+	 */
+	void BroadcastObjectState();
 
 	/** @return True if every atom in goalAtoms is present with a matching value in currentAtoms. */
 	bool IsTaskSatisfied(const TArray<FAtom>& goalAtoms, const TArray<FAtom>& currentAtoms) const;
