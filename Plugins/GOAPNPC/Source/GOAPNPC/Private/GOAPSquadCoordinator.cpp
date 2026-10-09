@@ -4,6 +4,13 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogGOAPSquad, Log, All);
 
+static TAutoConsoleVariable<bool> CVarGOAPLogSquad(
+	TEXT("GOAP.LogSquad"),
+	false,
+	TEXT("If true, logs squad coordinator events: task assignment, completion, lost agents and object broadcasts."),
+	ECVF_Default
+);
+
 AGOAPSquadCoordinator::AGOAPSquadCoordinator()
 {
 	PrimaryActorTick.bCanEverTick = true;
@@ -62,7 +69,7 @@ void AGOAPSquadCoordinator::AssignTasks()
 			if (controller == nullptr)
 				continue; // Not yet possessed this frame, or not a GOAPController.
 
-			bool alreadyBusy = tasks.ContainsByPredicate([controller](const FSquadTask& t) { return t.assignedTo == controller; });
+			bool alreadyBusy = tasks.ContainsByPredicate([controller](const FSquadTask& t) { return t.assignedTo.Get() == controller; });
 			if (alreadyBusy)
 				continue;
 
@@ -83,8 +90,11 @@ void AGOAPSquadCoordinator::AssignTasks()
 			task->assignedTo = best;
 			task->status = ESquadTaskStatus::Assigned;
 
-			UE_LOG(LogGOAPSquad, Warning, TEXT("Assigned task (priority %.1f, location %s) to agent %s (dist %.1f)"),
-				task->priority, *task->location.ToString(), *best->GetName(), FMath::Sqrt(bestDistSq));
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Assigned task (priority %.1f, location %s) to agent %s (dist %.1f)"),
+					task->priority, *task->location.ToString(), *best->GetName(), FMath::Sqrt(bestDistSq));
+			}
 		}
 		else
 		{
@@ -101,23 +111,30 @@ void AGOAPSquadCoordinator::CheckTaskCompletion()
 		if (task.status != ESquadTaskStatus::Assigned)
 			continue;
 
-		if (task.assignedTo == nullptr || task.assignedTo->GetPawn() == nullptr)
+		AGOAPController* agent = task.assignedTo.Get();
+		if (agent == nullptr || agent->GetPawn() == nullptr)
 		{
-			UE_LOG(LogGOAPSquad, Warning, TEXT("Task (priority %.1f, location %s) lost its agent - returning to Unassigned"),
-				task.priority, *task.location.ToString());
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Task (priority %.1f, location %s) lost its agent - returning to Unassigned"),
+					task.priority, *task.location.ToString());
+			}
 
-			task.assignedTo = nullptr;
+			task.assignedTo.Reset();
 			task.status = ESquadTaskStatus::Unassigned;
 			continue;
 		}
 
-		TArray<FAtom> currentAtoms = task.assignedTo->getCurrentWorldStateAtoms();
+		TArray<FAtom> currentAtoms = agent->getCurrentWorldStateAtoms();
 		if (IsTaskSatisfied(task.goalAtoms, currentAtoms))
 		{
-			UE_LOG(LogGOAPSquad, Warning, TEXT("Task (priority %.1f, location %s) completed by agent %s"),
-				task.priority, *task.location.ToString(), *task.assignedTo->GetName());
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Task (priority %.1f, location %s) completed by agent %s"),
+					task.priority, *task.location.ToString(), *agent->GetName());
+			}
 
-			task.assignedTo = nullptr;
+			task.assignedTo.Reset();
 			task.status = ESquadTaskStatus::Completed;
 		}
 	}
@@ -143,8 +160,11 @@ void AGOAPSquadCoordinator::BroadcastObjectState()
 			TArray<FAtom> atoms;
 			atoms.Add(IGOAPBroadcastable::Execute_GetBroadcastAtom(asObject));
 
-			UE_LOG(LogGOAPSquad, Warning, TEXT("Broadcasting atom '%s'=true from %s to %d squad member(s)"),
-				*atoms[0].name, *asObject->GetName(), squadMembers.Num());
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Broadcasting atom '%s'=true from %s to %d squad member(s)"),
+					*atoms[0].name, *asObject->GetName(), squadMembers.Num());
+			}
 
 			for (APawn* pawn : squadMembers)
 			{

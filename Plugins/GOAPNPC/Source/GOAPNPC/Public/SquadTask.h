@@ -36,7 +36,7 @@ struct FSquadTask
 
 	/** Runtime only - which agent currently owns this task, if any. */
 	UPROPERTY()
-	AGOAPController* assignedTo = nullptr;
+	TWeakObjectPtr<AGOAPController> assignedTo;
 
 	UPROPERTY()
 	ESquadTaskStatus status = ESquadTaskStatus::Unassigned;
