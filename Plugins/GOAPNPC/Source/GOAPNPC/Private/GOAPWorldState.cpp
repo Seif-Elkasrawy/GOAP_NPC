@@ -16,12 +16,12 @@ GOAPWorldState::GOAPWorldState(const std::map<FString, bool>& a)
 	atoms = a;
 }
 
-bool GOAPWorldState::operator==(GOAPWorldState  w)
+bool GOAPWorldState::operator==(const GOAPWorldState& w) const
 {
 	return atoms.size() == w.getAtoms().size() && std::equal(atoms.begin(), atoms.end(), w.getAtoms().begin());
 }
 
-bool GOAPWorldState::isIncluded(const GOAPWorldState& w)
+bool GOAPWorldState::isIncluded(const GOAPWorldState& w) const
 {
 	for (const auto& requirement : w.getAtoms())
 	{
