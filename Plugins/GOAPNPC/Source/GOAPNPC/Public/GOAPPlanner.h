@@ -79,7 +79,7 @@ private:
 	 * @param subgoal The subgoal to estimate remaining cost for.
 	 * @return The summed heuristic cost estimate.
 	 */
-	float computeHeuristic(SubgoalState subgoal);
+	float computeHeuristic(const SubgoalState& subgoal);
 
 public:
 
@@ -112,7 +112,7 @@ public:
 	 * @param list The list to search within.
 	 * @return The index of node within list, or -1 if not present.
 	 */
-	int getIndexInList(GOAPNode node, const TArray<GOAPNode>& list);
+	int getIndexInList(const GOAPNode& node, const TArray<GOAPNode>& list);
 
 	/**
 	 * Finds every action that could serve as a valid next step from current
@@ -129,7 +129,7 @@ public:
 	 *        to each candidate action's checkProceduralPrecondition.
 	 * @return Every node reachable from current via one valid action.
 	 */
-	TArray<GOAPNode> getAdjacent(GOAPNode current, APawn* p);
+	TArray<GOAPNode> getAdjacent(const GOAPNode& current, APawn* p);
 
 	/**
 	 * Runs backward-chaining A* search from goal toward currentWorld,

@@ -73,7 +73,7 @@ GOAPPlanner::GOAPPlanner(GOAPWorldState* c, GOAPWorldState* g, const TArray<UGOA
 	}
 }
 
-int GOAPPlanner::getIndexInList(GOAPNode node, const TArray<GOAPNode>& list)
+int GOAPPlanner::getIndexInList(const GOAPNode& node, const TArray<GOAPNode>& list)
 {
 	for (int i = 0; i < list.Num(); ++i)
 	{
@@ -83,7 +83,7 @@ int GOAPPlanner::getIndexInList(GOAPNode node, const TArray<GOAPNode>& list)
 	return -1;
 }
 
-float GOAPPlanner::computeHeuristic(SubgoalState subgoal)
+float GOAPPlanner::computeHeuristic(const SubgoalState& subgoal)
 {
 	float cost = 0.f;
 	for (auto& requirement : subgoal.getAtoms())
@@ -105,10 +105,10 @@ float GOAPPlanner::computeHeuristic(SubgoalState subgoal)
 	return cost;
 }
 
-TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, APawn* p)
+TArray<GOAPNode> GOAPPlanner::getAdjacent(const GOAPNode& current, APawn* p)
 {
 	TArray<GOAPNode> adjacentNodes;
-	SubgoalState currentSubgoal = current.getSubgoalState();
+	const SubgoalState& currentSubgoal = current.getSubgoalState();
 
 	// Only actions whose effects can satisfy at least one atom this
 	// subgoal still needs are candidates - looked up via the precomputed
@@ -156,9 +156,9 @@ TArray<GOAPNode> GOAPPlanner::getAdjacent(GOAPNode current, APawn* p)
 		// "resolvedSomething" check needed here anymore - the index
 		// enforces that invariant by construction.
 		GOAPWorldState effects = action->getEffects();
-		for (auto requirement : currentSubgoal.getAtoms())
+		const auto& effectAtoms = effects.getAtoms();
+		for (const auto& requirement : currentSubgoal.getAtoms())
 		{
-			auto effectAtoms = effects.getAtoms();
 			auto it = effectAtoms.find(requirement.first);
 			if (it != effectAtoms.end() && it->second == requirement.second)
 			{
@@ -187,10 +187,8 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 {
 	TArray<UGOAPAction*> sol;
 
-	// Min-heap by F score. Takes nodes by value (not const&) because
-	// GOAPNode's getters aren't const-qualified - same workaround the
-	// old lowestFinList used by iterating "GOAPNode n : opList" by value.
-	auto FComparator = [](GOAPNode A, GOAPNode B) { return A.getF() < B.getF(); };
+	// Min-heap by F score.
+	auto FComparator = [](const GOAPNode& A, const GOAPNode& B) { return A.getF() < B.getF(); };
 
 	GOAPNode start;
 	start.setSubgoalState(SubgoalState(*goal)); // goal seeds the root

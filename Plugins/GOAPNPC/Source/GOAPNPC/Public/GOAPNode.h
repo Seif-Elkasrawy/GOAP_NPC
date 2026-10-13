@@ -57,27 +57,27 @@ public:
 	 * @param n The node to compare against.
 	 * @return True if both nodes share the same action and subgoal state.
 	 */
-	bool operator==(GOAPNode n);
+	bool operator==(const GOAPNode& n) const;
 
 	// GETS
 
 	/** @return This node's heuristic cost estimate (remaining cost to the goal). */
-	float getH();
+	float getH() const;
 
 	/** @return This node's accumulated path cost from the search root. */
-	float getG();
+	float getG() const;
 
 	/** @return This node's total estimated cost (g + h), used to order the open-list heap. */
-	float getF();
+	float getF() const;
 
 	/** @return The index of this node's parent within the planner's closed list, or -1 for the root. */
-	int getParent();
+	int getParent() const;
 
 	/** @return This node's subgoal state - what still needs to be satisfied from this node onward. */
-	SubgoalState getSubgoalState();
+	const SubgoalState& getSubgoalState() const;
 
 	/** @return The action chosen to reach this node, or nullptr for the root. */
-	UGOAPAction* getAction();
+	UGOAPAction* getAction() const;
 
 	// SETS
 
@@ -86,7 +86,7 @@ public:
 	 *
 	 * @param s The subgoal state to assign to this node.
 	 */
-	void setSubgoalState(SubgoalState s);
+	void setSubgoalState(const SubgoalState& s);
 
 	/**
 	 * Sets this node's heuristic cost estimate directly. The estimate itself
@@ -105,7 +105,7 @@ public:
 	 *
 	 * @param p The parent node whose g should be added to this node's own.
 	 */
-	void setG(GOAPNode p);
+	void setG(const GOAPNode& p);
 
 	/**
 	 * Sets this node's parent index within the planner's closed list, used

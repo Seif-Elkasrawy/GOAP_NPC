@@ -45,7 +45,7 @@ public:
 	 * @param w The world state to compare against.
 	 * @return True if both world states contain the same atoms with the same values.
 	 */
-	bool operator==(GOAPWorldState w);
+	bool operator==(const GOAPWorldState& w) const;
 
 	/**
 	 * Checks whether this world state satisfies every atom w requires - i.e. whether
@@ -57,10 +57,10 @@ public:
 	 * @param w The set of required atoms to check for satisfaction.
 	 * @return True if every atom in w is present in this world state with a matching value.
 	 */
-	bool isIncluded(GOAPWorldState w);
+	bool isIncluded(const GOAPWorldState& w) const;
 
 	/** @return This world state's full set of (name, value) atoms. */
-	const std::map<FString, bool>& getAtoms();
+	const std::map<FString, bool>& getAtoms() const;
 
 	/**
 	 * Replaces this world state's entire atom set.
@@ -89,8 +89,8 @@ public:
 	 *
 	 * @param w The world state whose atoms should be merged into this one.
 	 */
-	void joinWorldState(GOAPWorldState w);
+	void joinWorldState(const GOAPWorldState& w);
 
 	/** @return True if this world state holds no atoms. */
-	bool isEmpty();
+	bool isEmpty() const;
 };

@@ -12,6 +12,7 @@ GOAPNode::GOAPNode()
 	action = NULL;
 	g = 0;
 	h = 0;
+	parent = -1;
 }
 
 GOAPNode::GOAPNode(UGOAPAction* a)
@@ -20,45 +21,46 @@ GOAPNode::GOAPNode(UGOAPAction* a)
 	if (a != NULL)g = a->getCost();
 	else g = 0;
 	h = 0;
+	parent = -1;
 }
 
-bool GOAPNode::operator==(GOAPNode n)
+bool GOAPNode::operator==(const GOAPNode& n) const
 {
 	return action == n.getAction() && subgoalState == (n.getSubgoalState());
 }
 
 
-SubgoalState GOAPNode::getSubgoalState()
+const SubgoalState& GOAPNode::getSubgoalState() const
 {
 	return subgoalState;
 }
 
-float GOAPNode::getH()
+float GOAPNode::getH() const
 {
 	return h;
 }
 
-float GOAPNode::getG()
+float GOAPNode::getG() const
 {
 	return g;
 }
 
-float GOAPNode::getF()
+float GOAPNode::getF() const
 {
 	return g + h;
 }
 
-int GOAPNode::getParent()
+int GOAPNode::getParent() const
 {
 	return parent;
 }
 
-UGOAPAction* GOAPNode::getAction()
+UGOAPAction* GOAPNode::getAction() const
 {
 	return action;
 }
 
-void GOAPNode::setSubgoalState(SubgoalState s)
+void GOAPNode::setSubgoalState(const SubgoalState& s)
 {
 	this->subgoalState = s;
 }
@@ -68,7 +70,7 @@ void GOAPNode::setH(float value)
 	this->h = value;
 }
 
-void GOAPNode::setG(GOAPNode p)
+void GOAPNode::setG(const GOAPNode& p)
 {
 	this->g += p.getG();
 }

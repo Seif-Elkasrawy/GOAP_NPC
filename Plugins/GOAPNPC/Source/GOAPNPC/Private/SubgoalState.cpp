@@ -9,16 +9,16 @@ SubgoalState::SubgoalState(const GOAPWorldState& goal)
 	requirements = goal;
 }
 
-bool SubgoalState::operator==(SubgoalState s)
+bool SubgoalState::operator==(const SubgoalState& s) const
 {
 	return requirements == s.getWorldState();
 }
 
-void SubgoalState::mergeUnsatisfiedRequirements(GOAPWorldState preconditions, GOAPWorldState realWorld)
+void SubgoalState::mergeUnsatisfiedRequirements(const GOAPWorldState& preconditions, const GOAPWorldState& realWorld)
 {
-	for (auto requirement : preconditions.getAtoms())
+	const auto& realAtoms = realWorld.getAtoms();
+	for (const auto& requirement : preconditions.getAtoms())
 	{
-		auto realAtoms = realWorld.getAtoms();
 		auto it = realAtoms.find(requirement.first);
 
 		// Only add if NOT already true in the real world.
@@ -29,7 +29,7 @@ void SubgoalState::mergeUnsatisfiedRequirements(GOAPWorldState preconditions, GO
 	}
 }
 
-void SubgoalState::removeAtom(FString name)
+void SubgoalState::removeAtom(const FString& name)
 {
 	// GOAPWorldState has no removal method, so rebuild its atom map
 	// without this key, then write it back via setAtoms().
@@ -38,17 +38,17 @@ void SubgoalState::removeAtom(FString name)
 	requirements.setAtoms(atoms);
 }
 
-const std::map<FString, bool>& SubgoalState::getAtoms()
+const std::map<FString, bool>& SubgoalState::getAtoms() const
 {
 	return requirements.getAtoms();
 }
 
-GOAPWorldState SubgoalState::getWorldState() const
+const GOAPWorldState& SubgoalState::getWorldState() const
 {
 	return requirements;
 }
 
-bool SubgoalState::isEmpty()
+bool SubgoalState::isEmpty() const
 {
 	return requirements.isEmpty();
 }

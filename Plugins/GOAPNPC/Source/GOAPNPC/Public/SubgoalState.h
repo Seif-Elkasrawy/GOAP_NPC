@@ -46,7 +46,7 @@ public:
 	 * @param s The subgoal state to compare against.
 	 * @return True if both subgoal states require exactly the same atoms.
 	 */
-	bool operator==(SubgoalState s);
+	bool operator==(const SubgoalState& s) const;
 
 	/**
 	 * Folds an action's preconditions into this subgoal as new requirements,
@@ -59,7 +59,7 @@ public:
 	 * @param realWorld The agent's real current world state, used to filter
 	 *        out precondition atoms that are already satisfied.
 	 */
-	void mergeUnsatisfiedRequirements(GOAPWorldState preconditions, GOAPWorldState realWorld);
+	void mergeUnsatisfiedRequirements(const GOAPWorldState& preconditions, const GOAPWorldState& realWorld);
 
 	/**
 	 * Removes a single requirement atom, once an action's effects have
@@ -69,10 +69,10 @@ public:
 	 *
 	 * @param name The name of the requirement atom to remove.
 	 */
-	void removeAtom(FString name);
+	void removeAtom(const FString& name);
 
 	/** @return This subgoal's full set of (name, value) requirement atoms. */
-	const std::map<FString, bool>& getAtoms();
+	const std::map<FString, bool>& getAtoms() const;
 
 	/**
 	 * Exposes the underlying GOAPWorldState so it can be passed into
@@ -81,8 +81,8 @@ public:
 	 *
 	 * @return A copy of this subgoal's requirements as a GOAPWorldState.
 	 */
-	GOAPWorldState getWorldState() const;
+	const GOAPWorldState& getWorldState() const;
 
 	/** @return True if this subgoal has no remaining requirement atoms - i.e. everything it needed has been satisfied. */
-	bool isEmpty();
+	bool isEmpty() const;
 };
