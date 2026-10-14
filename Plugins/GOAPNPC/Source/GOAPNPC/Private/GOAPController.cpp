@@ -103,6 +103,11 @@ bool AGOAPController::generatePlan()
 		return false;
 	}
 
+	if (GetPawn() == nullptr)
+	{
+		return false;
+	}
+
 	if (auxActions.Num() > 0 && !wsCurrentWorld.isEmpty() && !wsDesiredWorld.isEmpty())
 	{
 		// Creates the cheapest plan of actions.

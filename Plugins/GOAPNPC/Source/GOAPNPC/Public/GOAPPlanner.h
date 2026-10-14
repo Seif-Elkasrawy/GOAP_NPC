@@ -47,6 +47,9 @@ private:
 	// getLastExpansionCount() for benchmarking/diagnostics.
 	int lastExpansionCount = 0;
 
+	// a bool checking if the agent's plan is blocked to prevent spam
+	bool bLastPlanFailed = false;
+
 	// Precomputed: atom key ("name_T"/"name_F") -> actions whose effects
 	// can satisfy it. Built once from `actions`, avoids scanning every
 	// registered action (and calling its checkProceduralPrecondition)

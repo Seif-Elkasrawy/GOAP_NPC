@@ -270,10 +270,12 @@ TArray<UGOAPAction*> GOAPPlanner::generatePlan(APawn* p)
 		}
 	}
 
-	if (!goalReached)
+	if (!goalReached && !bLastPlanFailed)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GOAPPlanner: no plan found (openList empty or maxDepth reached)."));
+		UE_LOG(LogTemp, Warning, TEXT("GOAPPlanner: no plan found for %s (openList empty or maxDepth reached)."),
+			p ? *p->GetName() : TEXT("<null pawn>"));
 	}
+	bLastPlanFailed = !goalReached;
 
 	lastExpansionCount = closedList.Num();
 
