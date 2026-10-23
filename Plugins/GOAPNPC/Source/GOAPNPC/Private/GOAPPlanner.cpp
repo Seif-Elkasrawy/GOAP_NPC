@@ -314,6 +314,11 @@ int GOAPPlanner::getLastExpansionCount()
 	return lastExpansionCount;
 }
 
+bool GOAPPlanner::didLastPlanFail() const
+{
+	return bLastPlanFailed;
+}
+
 void GOAPPlanner::setMaxDepth(int md) {
 	maxDepth = md;
 }

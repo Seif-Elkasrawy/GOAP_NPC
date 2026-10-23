@@ -12,16 +12,16 @@
 #include "GOAPAction.h"
 #include "CoreMinimal.h"
 
-/**
- * Generates the cheapest sequence of actions (a plan) that transforms
- * currentWorld into a state satisfying goal, using backward-chaining A*
- * search: nodes represent a shrinking subgoal (what still needs to become
- * true), and edges represent actions that can satisfy part of that subgoal.
- * Precomputes an effect index and a cheapest-cost-per-atom index from its
- * action set once, so that both candidate lookup (getAdjacent) and the
- * search heuristic (computeHeuristic) avoid scanning every registered
- * action on every node expansion.
- */
+ /**
+  * Generates the cheapest sequence of actions (a plan) that transforms
+  * currentWorld into a state satisfying goal, using backward-chaining A*
+  * search: nodes represent a shrinking subgoal (what still needs to become
+  * true), and edges represent actions that can satisfy part of that subgoal.
+  * Precomputes an effect index and a cheapest-cost-per-atom index from its
+  * action set once, so that both candidate lookup (getAdjacent) and the
+  * search heuristic (computeHeuristic) avoid scanning every registered
+  * action on every node expansion.
+  */
 class GOAPNPC_API GOAPPlanner
 {
 private:
@@ -173,6 +173,9 @@ public:
 
 	/** @return The number of nodes genuinely expanded during the most recent generatePlan() call. */
 	int getLastExpansionCount();
+
+	/** @return True if the most recent generatePlan() call found no plan (as opposed to finding an empty plan because the goal was already satisfied). */
+	bool didLastPlanFail() const;
 
 	//SETS
 

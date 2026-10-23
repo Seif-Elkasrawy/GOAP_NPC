@@ -14,6 +14,20 @@ static TAutoConsoleVariable<bool> CVarGOAPLogStats(
 	ECVF_Default
 );
 
+static TAutoConsoleVariable<bool> CVarGOAPLogActions(
+	TEXT("GOAP.LogActions"),
+	false,
+	TEXT("If true, logs the result of every doAction call (InProgress/Succeeded/Failed)."),
+	ECVF_Default
+);
+
+static TAutoConsoleVariable<bool> CVarGOAPEventDriven(
+	TEXT("GOAP.EventDrivenReplanning"),
+	true,
+	TEXT("If true, agents replan only on events. If false, they replan on every executeGOAP call (continuous baseline)."),
+	ECVF_Default
+);
+
 AGOAPController::AGOAPController() {}
 
 AGOAPController::~AGOAPController()
@@ -75,24 +89,52 @@ void AGOAPController::Tick(float DeltaSeconds)
 
 bool AGOAPController::executeGOAP()
 {
-	if (generatePlan())
+	if (GetPawn() == nullptr)
 	{
-		if (plan.Num() > 0)
-		{
-			// Gets next action to perform.
-			UGOAPAction* aux = plan[0];
-
-			// Performs an action and when it's done its effects are applied, changing the current world state.
-			if (aux->doAction(GetPawn()))
-			{
-				wsCurrentWorld.joinWorldState(aux->getEffects());
-			}
-
-			return true;
-		}
+		return false;
 	}
 
-	return false;
+	// Replan only on an event: stale plan, no plan, or plan fully executed.
+	const bool bNeedsPlan = shouldReplan();
+	if (bNeedsPlan && !generatePlan())
+	{
+		return false;
+	}
+
+	if (planStep >= plan.Num())
+	{
+		return false; // No plan found, or the goal is already satisfied.
+	}
+
+	UGOAPAction* aux = plan[planStep];
+
+	const EGOAPActionResult result = aux->doAction(GetPawn());
+	lastActionResult = result;
+
+	if (CVarGOAPLogActions.GetValueOnGameThread())
+	{
+		UE_LOG(LogTemp, Log, TEXT("GOAP action: %s (step %d/%d) by %s -> %s"),
+			*aux->GetName(), planStep + 1, plan.Num(), *GetName(),
+			*UEnum::GetValueAsString(result));
+	}
+
+	switch (result)
+	{
+	case EGOAPActionResult::Succeeded:
+		// Effects are applied only on success, changing the current world state.
+		wsCurrentWorld.joinWorldState(aux->getEffects());
+		++planStep;
+		break;
+	case EGOAPActionResult::Failed:
+		// 5.2 only records the signal. Failure memory and escalation come in 5.4.
+		markPlanDirty(TEXT("action failed"));
+		break;
+	case EGOAPActionResult::InProgress:
+	default:
+		break;
+	}
+
+	return true;
 }
 
 bool AGOAPController::generatePlan()
@@ -113,12 +155,16 @@ bool AGOAPController::generatePlan()
 		// Creates the cheapest plan of actions.
 		double startTime = FPlatformTime::Seconds();
 		plan = planner->generatePlan(GetPawn());
+		planStep = 0;
+		bPlanDirty = false;
+		++planRequestCount;
+		lastPlanTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 		double elapsedMs = (FPlatformTime::Seconds() - startTime) * 1000.0;
 
 		if (CVarGOAPLogStats.GetValueOnGameThread())
 		{
 			UE_LOG(LogTemp, Log, TEXT("GOAP benchmark: expansions=%d time=%.4fms"),
-			planner->getLastExpansionCount(), elapsedMs);
+				planner->getLastExpansionCount(), elapsedMs);
 		}
 
 		if (debug && GEngine) debugInfo();
@@ -134,28 +180,106 @@ TArray<UGOAPAction*> AGOAPController::getPlan()
 	return plan;
 }
 
+void AGOAPController::invalidatePlan()
+{
+	markPlanDirty(TEXT("manual"));
+}
+
+int32 AGOAPController::getPlanRequestCount() const
+{
+	return planRequestCount;
+}
+
+void AGOAPController::markPlanDirty(const TCHAR* reason)
+{
+	bPlanDirty = true;
+
+	if (CVarGOAPLogActions.GetValueOnGameThread())
+	{
+		UE_LOG(LogTemp, Log, TEXT("GOAP replan requested for %s: %s"), *GetName(), reason);
+	}
+}
+
+bool AGOAPController::shouldReplan() const
+{
+	// Baseline mode, no planner yet, or something invalidated the plan.
+	if (!CVarGOAPEventDriven.GetValueOnGameThread() || planner == nullptr || bPlanDirty)
+	{
+		return true;
+	}
+
+	// Mid-plan: keep executing it.
+	if (planStep < plan.Num())
+	{
+		return false;
+	}
+
+	// Plan fully executed: search once to see whether the goal is now satisfied.
+	if (plan.Num() > 0)
+	{
+		return true;
+	}
+
+	// Empty plan, goal already satisfied: nothing can change until an event marks the plan dirty.
+	if (!planner->didLastPlanFail())
+	{
+		return false;
+	}
+
+	// Empty plan, no plan found: procedural preconditions can start passing without any atom
+	// changing, so retry, but slower than the executeGOAP call rate.
+	const UWorld* world = GetWorld();
+	return world == nullptr || (world->GetTimeSeconds() - lastPlanTimeSeconds) >= noPlanRetryInterval;
+}
+
+EGOAPActionResult AGOAPController::getLastActionResult() const
+{
+	return lastActionResult;
+}
+
 void AGOAPController::setGoal(const TArray<FAtom>& newGoal)
 {
 	wsDesiredWorld.cleanAtoms();
+	lastActionResult = EGOAPActionResult::InProgress; // A new goal clears the previous task's result.
 	updateGoal(newGoal);
+	markPlanDirty(TEXT("goal set"));
 }
 
 void AGOAPController::updateGoal(const TArray<FAtom>& atoms)
 {
 	for (FAtom atom : atoms)
 		wsDesiredWorld.addAtom(atom.name, atom.value);
+
+	markPlanDirty(TEXT("goal updated"));
 }
 
 void AGOAPController::setCurrentWorld(const TArray<FAtom>& newCurrentWorld)
 {
 	wsCurrentWorld.cleanAtoms();
 	updateCurrentWorld(newCurrentWorld);
+	markPlanDirty(TEXT("world replaced"));
 }
 
 void AGOAPController::updateCurrentWorld(const TArray<FAtom>& atoms)
 {
-	for (FAtom atom : atoms)
+	// Only a real change invalidates the plan: a broadcast that repeats a
+	// value the agent already believes must not force a replan.
+	bool bChanged = false;
+	const auto& existing = wsCurrentWorld.getAtoms();
+	for (const FAtom& atom : atoms)
+	{
+		auto it = existing.find(atom.name);
+		if (it == existing.end() || it->second != atom.value)
+		{
+			bChanged = true;
+		}
 		wsCurrentWorld.addAtom(atom.name, atom.value);
+	}
+
+	if (bChanged)
+	{
+		markPlanDirty(TEXT("world changed"));
+	}
 }
 
 TArray<FAtom> AGOAPController::getCurrentWorldStateAtoms()

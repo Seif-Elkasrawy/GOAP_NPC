@@ -13,15 +13,15 @@
 #include "Engine/Engine.h"
 #include "GOAPController.generated.h"
 
-/**
- * AIController that owns a GOAPPlanner, the agent's current and desired
- * world states, and the set of actions it can perform - the Blueprint-
- * facing entry point that ties GOAPWorldState, UGOAPAction, and
- * GOAPPlanner together into a usable AI controller. Current and desired
- * world state are private per instance; a shared/global current world
- * across agents would need to be built on top of this rather than
- * assumed by it.
- */
+ /**
+  * AIController that owns a GOAPPlanner, the agent's current and desired
+  * world states, and the set of actions it can perform - the Blueprint-
+  * facing entry point that ties GOAPWorldState, UGOAPAction, and
+  * GOAPPlanner together into a usable AI controller. Current and desired
+  * world state are private per instance; a shared/global current world
+  * across agents would need to be built on top of this rather than
+  * assumed by it.
+  */
 UCLASS()
 class GOAPNPC_API AGOAPController : public AAIController
 {
@@ -45,6 +45,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
 	int maxDepth = 100;
 
+	// Seconds to wait before searching again after a search found no plan. 0 = retry on every executeGOAP call.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
+	float noPlanRetryInterval = 1.0f;
+
 	//Debug info
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
 	bool debug;
@@ -52,7 +56,7 @@ public:
 	//Include controller's name
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
 	bool controller;
-	
+
 
 
 private:
@@ -69,6 +73,27 @@ private:
 	GOAPWorldState wsCurrentWorld;
 
 	GOAPWorldState wsDesiredWorld;
+
+	// Index into plan of the step executeGOAP will run next.
+	int32 planStep = 0;
+
+	// True when something invalidated the cached plan; starts true so the first call plans.
+	bool bPlanDirty = true;
+
+	// Number of generatePlan runs on this controller, see getPlanRequestCount().
+	int32 planRequestCount = 0;
+
+	// World time of the most recent planner run, used for noPlanRetryInterval.
+	double lastPlanTimeSeconds = 0.0;
+
+	/** Decides whether executeGOAP must run the planner this call (see the table in 5.3b). */
+	bool shouldReplan() const;
+
+	/** Sets bPlanDirty; logs the reason when GOAP.LogActions is enabled. */
+	void markPlanDirty(const TCHAR* reason);
+
+	// Result of the most recent doAction call, see getLastActionResult().
+	EGOAPActionResult lastActionResult = EGOAPActionResult::InProgress;
 
 public:
 
@@ -89,16 +114,18 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 
 	/**
-	 * Generates a plan (see generatePlan) and, if one exists, performs its
-	 * first action via doAction. On success, applies that action's effects
-	 * to wsCurrentWorld so the next plan is generated against the updated
-	 * world state.
+	 * Executes one step of the cached plan. Plans first only if the plan
+	 * is stale (see invalidatePlan), empty, or fully executed; otherwise
+	 * keeps the existing plan. Calls doAction on plan[planStep]:
+	 * Succeeded applies the action's effects and advances to the next step,
+	 * InProgress changes nothing, Failed is recorded in lastActionResult and
+	 * marks the plan stale so the next call replans.
 	 *
-	 * @return True if an action was performed this call.
+	 * @return True if an action was performed this call (whatever its result).
 	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
 	bool executeGOAP();
-	
+
 	/**
 	 * Runs the planner (see GOAPPlanner::generatePlan) against this
 	 * controller's current world, goal, and actions, storing the result in
@@ -117,6 +144,26 @@ public:
 	TArray<UGOAPAction*> getPlan();
 
 	/**
+	 * Marks the cached plan as stale, so the next executeGOAP call
+	 * generates a new one. Called internally on goal changes, world-state
+	 * changes and action failures; also callable from Blueprint (e.g. from
+	 * an interactive-showcase event) to force a replan.
+	 */
+	UFUNCTION(BlueprintCallable, Category = GOAPController)
+	void invalidatePlan();
+
+	/** @return How many times this controller has run the planner (for benchmarking plan requests). */
+	UFUNCTION(BlueprintCallable, Category = GOAPController)
+	int32 getPlanRequestCount() const;
+
+	/**
+	* @return The result of the most recent doAction call made by
+	* executeGOAP. InProgress until the first action has run.
+	*/
+	UFUNCTION(BlueprintCallable, Category = GOAPController)
+	EGOAPActionResult getLastActionResult() const;
+
+	/**
 	 * Replaces this controller's goal entirely with newGoal.
 	 *
 	 * @param newGoal The atoms defining the new goal state.
@@ -133,7 +180,7 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
 	void updateGoal(const TArray<FAtom>& atoms);
-	
+
 	/**
 	 * Replaces this controller's current world state entirely with
 	 * newCurrentWorld.
