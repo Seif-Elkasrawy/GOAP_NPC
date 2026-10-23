@@ -1,8 +1,8 @@
 /**
 	GOAP NPC: Goal-Oriented Action Planning for Non-Player Characters
-	Copyright © 2022 Narratech Laboratories
+	Copyright � 2022 Narratech Laboratories
 
-	Authors: Diego Romero-Hombrebueno Santos, Mario Sánchez Blanco, José Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
+	Authors: Diego Romero-Hombrebueno Santos, Mario S�nchez Blanco, Jos� Manuel Sierra Ramos, Daniel Gil Aguilar and Federico Peinado
 	Website: https://narratech.com/project/goap-npc/
  */
 #pragma once
@@ -14,11 +14,28 @@
 #include "UObject/NoExportTypes.h"
 #include "GOAPAction.generated.h"
 
-/**
- * A single (name, value) atom, exposed as a Blueprint-editable struct so
- * designers can author an action's preconditions and effects directly in
- * the editor, without needing to construct a GOAPWorldState by hand.
- */
+ /**
+  * Result of one doAction call. InProgress is deliberately the first
+  * (zero) value: an action Blueprint whose return pin is left unwired
+  * returns InProgress, which is the safe default (no effects applied,
+  * no failure recorded).
+  */
+UENUM(BlueprintType)
+enum class EGOAPActionResult : uint8
+{
+	/** The action is still running (e.g. still walking to its target). Effects are not applied. */
+	InProgress,
+	/** The action completed. Its declared effects are applied to the world state. */
+	Succeeded,
+	/** The action cannot complete (e.g. door jammed). Effects are not applied; the failure is reported to the controller. */
+	Failed
+};
+
+ /**
+  * A single (name, value) atom, exposed as a Blueprint-editable struct so
+  * designers can author an action's preconditions and effects directly in
+  * the editor, without needing to construct a GOAPWorldState by hand.
+  */
 USTRUCT(BlueprintType, Blueprintable)
 struct FAtom
 {
@@ -30,7 +47,7 @@ struct FAtom
 
 	/** The atom's required or resulting truth value. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Atom)
-		bool value;
+	bool value;
 
 };
 
@@ -92,7 +109,7 @@ public:
 	 * @return Every actor of targetsType currently in the world.
 	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPAction)
-		TArray<AActor*> getTargetsList(APawn* p);
+	TArray<AActor*> getTargetsList(APawn* p);
 
 	/**
 	 * Finds the nearest actor of targetsType to p, excluding p itself, and
@@ -105,7 +122,7 @@ public:
 	 * @return True if a target was found and assigned; false if no valid candidate exists.
 	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPAction)
-		bool findClosestTarget(APawn* p);
+	bool findClosestTarget(APawn* p);
 
 	/**
 	 * Optional, per-action check for whether this action can currently be
@@ -117,20 +134,22 @@ public:
 	 * @return True if this action is currently valid to perform.
 	 */
 	UFUNCTION(BlueprintImplementableEvent, Category = GOAPAction)
-		bool checkProceduralPrecondition(APawn* p);
+	bool checkProceduralPrecondition(APawn* p);
 
 	/**
-	 * Performs the action's actual gameplay behaviour. Implemented entirely
-	 * in Blueprint; there is no native C++ body. The planner does not call
-	 * this directly - GOAPController invokes it once an action is chosen
-	 * to execute, then applies the action's declared effects to the real
-	 * world state if it succeeds.
+	 * Performs one step of the action's gameplay behaviour. Implemented
+	 * entirely in Blueprint; there is no native C++ body. The planner does
+	 * not call this directly - GOAPController invokes it once an action is
+	 * chosen to execute. Called repeatedly (once per executeGOAP call)
+	 * until it stops returning InProgress.
 	 *
 	 * @param p The pawn performing the action.
-	 * @return True if the action completed successfully.
+	 * @return InProgress while still running, Succeeded once complete
+	 *         (the controller then applies the declared effects), or
+	 *         Failed if the action cannot complete.
 	 */
 	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable, Category = GOAPAction)
-		bool doAction(APawn* p);
+	EGOAPActionResult doAction(APawn* p);
 
 	/**
 	 * Builds this action's internal GOAPWorldState representations
@@ -172,7 +191,7 @@ public:
 	 * @return The assigned target actor, or nullptr if none has been set.
 	 */
 	UFUNCTION(BlueprintCallable, Category = GOAPAction)
-		AActor* getTarget();
+	AActor* getTarget();
 
 	/** @return This action's preconditions, as a GOAPWorldState built from the preconditions array. */
 	GOAPWorldState getPreconditions();
@@ -196,11 +215,11 @@ public:
 	 */
 	void setCost(float c);
 
-		/**
-	 * Assigns a specific target actor directly, bypassing findClosestTarget.
-	 *
-	 * @param t The actor to assign as this action's target.
-	 */
+	/**
+ * Assigns a specific target actor directly, bypassing findClosestTarget.
+ *
+ * @param t The actor to assign as this action's target.
+ */
 	UFUNCTION(BlueprintCallable, Category = GOAPAction)
 	void setTarget(AActor* t);
 
