@@ -6,6 +6,7 @@
 	Website: https://narratech.com/project/goap-npc/
  */
 #include "GOAPPlanner.h"
+#include "GOAPFailureMemory.h"
 
 GOAPPlanner::GOAPPlanner() {}
 
@@ -124,6 +125,8 @@ TArray<GOAPNode> GOAPPlanner::getAdjacent(const GOAPNode& current, APawn* p)
 			}
 		}
 	}
+
+	const double now = (p && p->GetWorld()) ? p->GetWorld()->GetTimeSeconds() : 0.0;
 	for (UGOAPAction* action : candidates)
 	{
 		FString actionName = action->GetName();
@@ -168,13 +171,17 @@ TArray<GOAPNode> GOAPPlanner::getAdjacent(const GOAPNode& current, APawn* p)
 
 		newSubgoal.mergeUnsatisfiedRequirements(action->getPreconditions(), *currentWorld);
 
+		// Failure penalty for this agent (0 if no memory is set or the action never failed).
+		const float penalty = failureMemory ? failureMemory->getPenalty(action, now) : 0.f;
+		const float effectiveCost = action->getCost() + penalty;
+
 		if (CVarGOAPLogCandidates.GetValueOnGameThread())
 		{
-			UE_LOG(LogTemp, Log, TEXT("GOAP candidate: action=%s ACCEPTED cost=%.1f new subgoal={ %s}"),
-				*actionName, action->getCost(), *FormatAtoms(newSubgoal.getAtoms()));
+			UE_LOG(LogTemp, Log, TEXT("GOAP candidate: action=%s ACCEPTED cost=%.1f (base %.1f + penalty %.1f) new subgoal={ %s}"),
+				*actionName, effectiveCost, action->getCost(), penalty, *FormatAtoms(newSubgoal.getAtoms()));
 		}
 
-		GOAPNode adjacent(action); // constructor sets g = action's cost, h = 0
+		GOAPNode adjacent(action, effectiveCost); // g = base cost + failure penalty, h = 0
 		adjacent.setSubgoalState(newSubgoal);
 		adjacentNodes.Push(adjacent);
 
@@ -286,6 +293,11 @@ void GOAPPlanner::addAction(UGOAPAction* a)
 {
 	this->actions.Push(a);
 	indexAction(a);
+}
+
+void GOAPPlanner::setFailureMemory(const GOAPFailureMemory* memory)
+{
+	failureMemory = memory;
 }
 
 GOAPWorldState GOAPPlanner::getGoal()

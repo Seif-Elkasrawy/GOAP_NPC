@@ -12,6 +12,7 @@
 #include "GOAPAction.h"
 #include "CoreMinimal.h"
 
+class GOAPFailureMemory;   
  /**
   * Generates the cheapest sequence of actions (a plan) that transforms
   * currentWorld into a state satisfying goal, using backward-chaining A*
@@ -32,6 +33,10 @@ private:
 
 	// Not owned by this planner - see currentWorld.
 	GOAPWorldState* goal;
+
+	// Not owned by this planner - set by the controller (see
+	// AGOAPController::BeginPlay). Null means no failure penalties apply.
+	const GOAPFailureMemory* failureMemory = nullptr;
 
 	TArray<UGOAPAction*> actions;
 
@@ -151,6 +156,16 @@ public:
 	 *         if no plan was found.
 	 */
 	TArray<UGOAPAction*> generatePlan(APawn* p);
+
+	/**
+	 * Sets the failure memory whose penalties getAdjacent adds to each
+	 * action's cost, so actions that recently failed for this agent look
+	 * more expensive and the planner prefers alternatives. Does not take
+	 * ownership - memory must outlive this planner. Null disables penalties.
+	 *
+	 * @param memory The agent's failure memory, or nullptr for none.
+	 */
+	void setFailureMemory(const GOAPFailureMemory* memory);
 
 	/**
 	 * Registers an additional action with this planner after construction,

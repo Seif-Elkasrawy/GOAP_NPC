@@ -24,6 +24,14 @@ GOAPNode::GOAPNode(UGOAPAction* a)
 	parent = -1;
 }
 
+GOAPNode::GOAPNode(UGOAPAction* a, float cost)
+{
+	action = a;
+	g = cost;
+	h = 0;
+	parent = -1;
+}
+
 bool GOAPNode::operator==(const GOAPNode& n) const
 {
 	return action == n.getAction() && subgoalState == (n.getSubgoalState());

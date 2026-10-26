@@ -8,6 +8,7 @@
 #pragma once
 
 #include "GOAPPlanner.h"
+#include "GOAPFailureMemory.h"
 #include "CoreMinimal.h"
 #include "AIController.h"
 #include "Engine/Engine.h"
@@ -48,6 +49,21 @@ public:
 	// Seconds to wait before searching again after a search found no plan. 0 = retry on every executeGOAP call.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
 	float noPlanRetryInterval = 1.0f;
+
+	// Tunables
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
+	float failurePenalty = 10.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
+	float penaltyDecayRate = 0.5f;   // penalty units per second
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
+	int32 maxFailuresPerGoal = 6;
+
+	// Private state
+	GOAPFailureMemory failureMemory;
+	int32 failuresThisGoal = 0;
+	bool bGaveUp = false;
 
 	//Debug info
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = GOAP)
@@ -162,6 +178,14 @@ public:
 	*/
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
 	EGOAPActionResult getLastActionResult() const;
+
+	/**
+	 * @return True if the agent used up its failure budget on the current
+	 * goal (maxFailuresPerGoal) and stopped executing. Cleared by setGoal.
+	 * The squad coordinator reads this to hand the task to another agent.
+	 */
+	UFUNCTION(BlueprintCallable, Category = GOAPController)
+	bool hasGivenUp() const;
 
 	/**
 	 * Replaces this controller's goal entirely with newGoal.

@@ -63,6 +63,8 @@ void AGOAPController::BeginPlay()
 	// Loads Planner.
 	planner = new GOAPPlanner(&wsCurrentWorld, &wsDesiredWorld, auxActions);
 	planner->setMaxDepth(maxDepth);
+	failureMemory.configure(failurePenalty, penaltyDecayRate);
+	planner->setFailureMemory(&failureMemory);
 
 	// Error messages.
 	if (auxActions.Num() == 0)
@@ -93,6 +95,8 @@ bool AGOAPController::executeGOAP()
 	{
 		return false;
 	}
+
+	if (bGaveUp) return false;
 
 	// Replan only on an event: stale plan, no plan, or plan fully executed.
 	const bool bNeedsPlan = shouldReplan();
@@ -126,9 +130,27 @@ bool AGOAPController::executeGOAP()
 		++planStep;
 		break;
 	case EGOAPActionResult::Failed:
-		// 5.2 only records the signal. Failure memory and escalation come in 5.4.
-		markPlanDirty(TEXT("action failed"));
+	{
+		const double now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+		failureMemory.recordFailure(aux, now);
+		++failuresThisGoal;
+
+		if (failuresThisGoal >= maxFailuresPerGoal)
+		{
+			bGaveUp = true;
+			if (CVarGOAPLogActions.GetValueOnGameThread())
+			{
+				UE_LOG(LogTemp, Log, TEXT("GOAP agent %s gave up on its goal after %d failures (last: %s)"),
+					*GetName(), failuresThisGoal, *aux->GetName());
+			}
+		}
+		else
+		{
+			markPlanDirty(TEXT("action failed"));
+		}
 		break;
+	}
+	
 	case EGOAPActionResult::InProgress:
 	default:
 		break;
@@ -145,11 +167,8 @@ bool AGOAPController::generatePlan()
 		return false;
 	}
 
-	if (GetPawn() == nullptr)
-	{
-		return false;
-	}
-
+	if (GetPawn() == nullptr) return false;
+	
 	if (auxActions.Num() > 0 && !wsCurrentWorld.isEmpty() && !wsDesiredWorld.isEmpty())
 	{
 		// Creates the cheapest plan of actions.
@@ -237,10 +256,18 @@ EGOAPActionResult AGOAPController::getLastActionResult() const
 	return lastActionResult;
 }
 
+bool AGOAPController::hasGivenUp() const
+{
+	return bGaveUp;
+}
+
 void AGOAPController::setGoal(const TArray<FAtom>& newGoal)
 {
 	wsDesiredWorld.cleanAtoms();
 	lastActionResult = EGOAPActionResult::InProgress; // A new goal clears the previous task's result.
+	failureMemory.clear();
+	failuresThisGoal = 0;
+	bGaveUp = false;
 	updateGoal(newGoal);
 	markPlanDirty(TEXT("goal set"));
 }

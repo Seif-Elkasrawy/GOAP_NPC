@@ -46,6 +46,18 @@ public:
 	 */
 	GOAPNode(UGOAPAction* a);
 
+		/**
+	 * Constructs a node reached via the given action with an explicit own
+	 * cost, instead of the action's base cost. Lets the planner fold
+	 * per-agent adjustments (e.g. failure penalties) into g without this
+	 * node knowing where they come from. The existing single-argument
+	 * constructor delegates here with the action's base cost.
+	 *
+	 * @param a The action chosen to reach this node.
+	 * @param cost This node's own cost, accumulated with the parent's g later via setG.
+	 */
+	GOAPNode(UGOAPAction* a, float cost);
+
 	//OPERATORS 
 
 	/**
