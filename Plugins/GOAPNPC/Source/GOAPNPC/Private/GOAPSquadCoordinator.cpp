@@ -7,7 +7,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogGOAPSquad, Log, All);
 static TAutoConsoleVariable<bool> CVarGOAPLogSquad(
 	TEXT("GOAP.LogSquad"),
 	false,
-	TEXT("If true, logs squad coordinator events: task assignment, completion, lost agents and object broadcasts."),
+	TEXT("If true, logs squad coordinator events: task assignment, completion, lost agents, give-up handbacks, failed tasks, retries and object broadcasts."),
 	ECVF_Default
 );
 
@@ -39,6 +39,7 @@ void AGOAPSquadCoordinator::BeginPlay()
 void AGOAPSquadCoordinator::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	RetryFailedTasks();
 	AssignTasks();
 	CheckTaskCompletion();
 	BroadcastObjectState();
@@ -60,6 +61,11 @@ void AGOAPSquadCoordinator::AssignTasks()
 		AGOAPController* best = nullptr;
 		float bestDistSq = TNumericLimits<float>::Max();
 
+		// Live squad members that have not given up on this task, busy or not.
+		// A busy agent is still eligible (it may be free later), so this is
+		// counted before the busy check.
+		int32 eligibleAgents = 0;
+
 		for (APawn* pawn : squadMembers)
 		{
 			if (pawn == nullptr)
@@ -69,6 +75,11 @@ void AGOAPSquadCoordinator::AssignTasks()
 			if (controller == nullptr)
 				continue; // Not yet possessed this frame, or not a GOAPController.
 
+			if (task->excludedAgents.ContainsByPredicate([controller](const TWeakObjectPtr<AGOAPController>& w) { return w.Get() == controller; }))
+				continue; // This agent already gave up on this task.
+
+			++eligibleAgents;
+			
 			bool alreadyBusy = tasks.ContainsByPredicate([controller](const FSquadTask& t) { return t.assignedTo.Get() == controller; });
 			if (alreadyBusy)
 				continue;
@@ -94,6 +105,18 @@ void AGOAPSquadCoordinator::AssignTasks()
 			{
 				UE_LOG(LogGOAPSquad, Log, TEXT("Assigned task (priority %.1f, location %s) to agent %s (dist %.1f)"),
 					task->priority, *task->location.ToString(), *best->GetName(), FMath::Sqrt(bestDistSq));
+			}
+		}
+		else if (eligibleAgents == 0 && !task->excludedAgents.IsEmpty())
+		{
+			// Somebody gave up on this task and nobody else is left to try it.
+			task->status = ESquadTaskStatus::Failed;
+			task->failedAtTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Task (priority %.1f, location %s) failed: every available agent has given up on it"),
+					task->priority, *task->location.ToString());
 			}
 		}
 		else
@@ -125,6 +148,8 @@ void AGOAPSquadCoordinator::CheckTaskCompletion()
 			continue;
 		}
 
+		// Completion is checked before the give-up flag: a task whose goal is
+		// already satisfied is done, even if the failure counter also tripped.
 		TArray<FAtom> currentAtoms = agent->getCurrentWorldStateAtoms();
 		if (IsTaskSatisfied(task.goalAtoms, currentAtoms))
 		{
@@ -136,6 +161,49 @@ void AGOAPSquadCoordinator::CheckTaskCompletion()
 
 			task.assignedTo.Reset();
 			task.status = ESquadTaskStatus::Completed;
+		}
+
+		if (agent->hasGivenUp())
+		{
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Agent %s gave up on task (priority %.1f, location %s) - handing it back"),
+					*agent->GetName(), task.priority, *task.location.ToString());
+			}
+
+			task.excludedAgents.AddUnique(agent);
+			task.assignedTo.Reset();
+			task.status = ESquadTaskStatus::Unassigned;
+		}
+	}
+}
+
+void AGOAPSquadCoordinator::RetryFailedTasks()
+{
+	if (failedTaskRetryCooldown <= 0.f)
+		return; // Retrying disabled: Failed tasks stay Failed.
+
+	const double now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+	for (FSquadTask& task : tasks)
+	{
+		if (task.status != ESquadTaskStatus::Failed)
+			continue;
+
+		if (task.retryCount >= maxFailedTaskRetries)
+			continue; // Retry budget used up: stays Failed for good.
+
+		if (now - task.failedAtTime >= failedTaskRetryCooldown)
+		{
+			++task.retryCount;
+			task.excludedAgents.Empty();
+			task.status = ESquadTaskStatus::Unassigned;
+
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Retrying failed task (priority %.1f, location %s), attempt %d of %d"),
+					task.priority, *task.location.ToString(), task.retryCount, maxFailedTaskRetries);
+			}
 		}
 	}
 }

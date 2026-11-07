@@ -37,6 +37,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
 	TArray<AActor*> broadcastObjects;
 
+	
+	/** Seconds after which a Failed task is retried (excluded agents cleared). 0 = never retry. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
+	float failedTaskRetryCooldown = 0.f;
+
+	/**
+	 * Maximum number of times a Failed task is retried. Only applies when
+	 * failedTaskRetryCooldown is greater than 0. Once reached, the task
+	 * stays Failed for good.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
+	int32 maxFailedTaskRetries = 3;
+
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void BeginPlay() override;
 
@@ -50,18 +63,31 @@ private:
 
 	/**
 	 * Greedily assigns unclaimed tasks, highest priority first, to the
-	 * nearest available (currently unassigned) squad member. Not an
-	 * optimal matcher - ties and near-ties are broken arbitrarily by
-	 * iteration order, not globally optimised.
+	 * nearest available (currently unassigned) squad member, skipping
+	 * agents in the task's excludedAgents. A task that has excluded agents
+	 * and no eligible agent left (every live squad member gave up on it)
+	 * is marked Failed. Not an optimal matcher - ties and near-ties are
+	 * broken arbitrarily by iteration order, not globally optimised.
 	 */
 	void AssignTasks();
 
 	/**
-	 * Checks each assigned task's goalAtoms against its agent's current
-	 * world state (via getCurrentWorldStateAtoms). A task whose atoms are
-	 * all satisfied is marked complete and its agent freed for reassignment.
+	 * Checks each assigned task against its agent. A task whose agent was
+	 * lost is returned to Unassigned. A task whose goalAtoms are all
+	 * satisfied in the agent's world state (via getCurrentWorldStateAtoms)
+	 * is marked complete and its agent freed. A task whose agent reports
+	 * hasGivenUp() is handed back: it returns to Unassigned and that agent
+	 * is added to its excludedAgents so it is not handed straight back.
 	 */
 	void CheckTaskCompletion();
+
+	/**
+	 * Retries Failed tasks once failedTaskRetryCooldown has passed since
+	 * they failed: clears their excludedAgents, increments retryCount and
+	 * returns them to Unassigned. Does nothing when the cooldown is 0, and
+	 * leaves a task Failed once it has used maxFailedTaskRetries.
+	 */
+	void RetryFailedTasks();
 
 	/**
 	 * For each entry in broadcastObjects not yet announced: if

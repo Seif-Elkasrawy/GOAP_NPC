@@ -11,7 +11,8 @@ enum class ESquadTaskStatus : uint8
 {
 	Unassigned,
 	Assigned,
-	Completed
+	Completed,
+	Failed
 };
 
 USTRUCT(BlueprintType)
@@ -37,6 +38,18 @@ struct FSquadTask
 	/** Runtime only - which agent currently owns this task, if any. */
 	UPROPERTY()
 	TWeakObjectPtr<AGOAPController> assignedTo;
+
+	/** Runtime only - agents that gave up on this task and must not be handed it again. */
+	UPROPERTY()
+	TArray<TWeakObjectPtr<AGOAPController>> excludedAgents;
+
+	/** Runtime only - world time the task entered Failed, used for the optional retry cooldown. */
+	UPROPERTY()
+	double failedAtTime = 0.0;
+
+		/** Runtime only - how many times this Failed task has been retried so far. */
+	UPROPERTY()
+	int32 retryCount = 0;
 
 	UPROPERTY()
 	ESquadTaskStatus status = ESquadTaskStatus::Unassigned;
