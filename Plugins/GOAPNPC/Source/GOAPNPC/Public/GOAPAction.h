@@ -90,7 +90,7 @@ public:
 
 private:
 
-	AActor* target;
+	TWeakObjectPtr<AActor> target;
 
 	GOAPWorldState wsPreconditions;
 

@@ -82,7 +82,7 @@ float UGOAPAction::getCost()
 
 AActor* UGOAPAction::getTarget()
 {
-	return target;
+	return target.Get();
 }
 
 GOAPWorldState UGOAPAction::getPreconditions()

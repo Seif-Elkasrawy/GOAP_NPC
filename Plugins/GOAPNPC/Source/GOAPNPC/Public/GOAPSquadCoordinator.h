@@ -100,4 +100,6 @@ private:
 
 	/** @return True if every atom in goalAtoms is present with a matching value in currentAtoms. */
 	bool IsTaskSatisfied(const TArray<FAtom>& goalAtoms, const TArray<FAtom>& currentAtoms) const;
+
+	void drawDebug() const;
 };

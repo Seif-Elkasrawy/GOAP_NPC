@@ -6,6 +6,7 @@
 	Website: https://narratech.com/project/goap-npc/
  */
 #include "GOAPController.h"
+#include "DrawDebugHelpers.h"
 
 static TAutoConsoleVariable<bool> CVarGOAPLogStats(
 	TEXT("GOAP.LogStats"),
@@ -25,6 +26,13 @@ static TAutoConsoleVariable<bool> CVarGOAPEventDriven(
 	TEXT("GOAP.EventDrivenReplanning"),
 	true,
 	TEXT("If true, agents replan only on events. If false, they replan on every executeGOAP call (continuous baseline)."),
+	ECVF_Default
+);
+
+static TAutoConsoleVariable<int32> CVarGOAPDebugDraw(
+	TEXT("GOAP.DebugDraw"),
+	0,
+	TEXT("0 = off, 1 = compact status label above each agent, 2 = full (goal, plan step, failures, line to target)."),
 	ECVF_Default
 );
 
@@ -87,6 +95,81 @@ void AGOAPController::OnPossess(APawn* pawn)
 void AGOAPController::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+
+#if ENABLE_DRAW_DEBUG
+	const int32 level = CVarGOAPDebugDraw.GetValueOnGameThread();
+	if (level > 0)
+	{
+		drawDebug(level);
+	}
+#endif
+}
+
+void AGOAPController::drawDebug(int32 level) const
+{
+#if ENABLE_DRAW_DEBUG
+	const APawn* pawn = GetPawn();
+	UWorld* world = GetWorld();
+	if (pawn == nullptr || world == nullptr || planner == nullptr)
+		return;
+
+	// Status colour and text, checked from most to least severe.
+	FColor color = FColor::Green;
+	FString status = TEXT("RUNNING");
+
+	if (bGaveUp)
+	{
+		color = FColor::Red;
+		status = TEXT("GAVE UP");
+	}
+	else if (lastActionResult == EGOAPActionResult::Failed)
+	{
+		color = FColor::Orange;
+		status = TEXT("FAILED");
+	}
+	else if (plan.Num() == 0)
+	{
+		color = planner->didLastPlanFail() ? FColor::Yellow : FColor::Silver;
+		status = planner->didLastPlanFail() ? TEXT("NO PLAN") : TEXT("IDLE");
+	}
+
+	FString label = status;
+	// level 2: extend label with the current action and step, the failure count,
+	// and the goal atoms
+	if (level >= 2)
+	{
+		// Current action and where we are in the plan.
+		if (const UGOAPAction* action = getCurrentAction())
+		{
+			label += FString::Printf(TEXT("\n%s [%d/%d]"), *action->GetName(), planStep + 1, plan.Num());
+		}
+
+		// Failure budget for this goal.
+		label += FString::Printf(TEXT("\nfails %d/%d"), failuresThisGoal, maxFailuresPerGoal);
+
+		// Goal atoms.
+		FString goalStr;
+
+		for (const auto& atom : wsDesiredWorld.getAtoms())
+		{
+			goalStr += FString::Printf(TEXT("%s=%s "), *atom.first, atom.second ? TEXT("T") : TEXT("F"));
+		}
+		label += TEXT("\ngoal: ") + goalStr;
+	}
+
+	if (level >= 2 && !bGaveUp)
+	{
+		if (UGOAPAction* action = getCurrentAction())
+		{
+			if (AActor* target = action->getTarget())   // nullptr if it was destroyed
+			{
+				DrawDebugLine(world, pawn->GetActorLocation(), target->GetActorLocation(), color, false, 0.f, 0, 2.f);
+			}
+		}
+	}
+
+	DrawDebugString(world, pawn->GetActorLocation() + FVector(0.f, 0.f, 120.f), label, nullptr, color, 0.f, true);
+#endif
 }
 
 bool AGOAPController::executeGOAP()

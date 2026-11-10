@@ -1,6 +1,7 @@
 #include "GOAPSquadCoordinator.h"
 #include "GOAPController.h"
 #include "Logging/LogMacros.h"
+#include "DrawDebugHelpers.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGOAPSquad, Log, All);
 
@@ -43,6 +44,15 @@ void AGOAPSquadCoordinator::Tick(float DeltaSeconds)
 	AssignTasks();
 	CheckTaskCompletion();
 	BroadcastObjectState();
+
+#if ENABLE_DRAW_DEBUG
+	static const TConsoleVariableData<int32>* debugDrawVar =
+		IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("GOAP.DebugDraw"));
+	if (debugDrawVar != nullptr && debugDrawVar->GetValueOnGameThread() > 0)
+	{
+		drawDebug();
+	}
+#endif
 }
 
 void AGOAPSquadCoordinator::AssignTasks()
@@ -255,4 +265,42 @@ bool AGOAPSquadCoordinator::IsTaskSatisfied(const TArray<FAtom>& goalAtoms, cons
 			return false;
 	}
 	return true;
+}
+
+void AGOAPSquadCoordinator::drawDebug() const
+{
+#if ENABLE_DRAW_DEBUG
+	UWorld* world = GetWorld();
+	if (world == nullptr)
+		return;
+
+	for (const FSquadTask& task : tasks)
+	{
+		FColor color = FColor::Yellow;
+		const TCHAR* statusText = TEXT("UNASSIGNED");
+
+		switch (task.status)
+		{
+		case ESquadTaskStatus::Assigned:  color = FColor::Cyan;  statusText = TEXT("ASSIGNED"); break;
+		case ESquadTaskStatus::Completed: color = FColor::Green; statusText = TEXT("DONE");     break;
+		case ESquadTaskStatus::Failed:    color = FColor::Red;   statusText = TEXT("FAILED");   break;
+		default: break;
+		}
+
+		FString label = FString::Printf(TEXT("%s\nprio %.0f"), statusText, task.priority);
+
+		const AGOAPController* agent = task.assignedTo.Get();
+		if (agent != nullptr)
+		{
+			label += TEXT("\n-> ") + agent->GetName();
+			if (const APawn* pawn = agent->GetPawn())
+			{
+				DrawDebugLine(world, pawn->GetActorLocation(), task.location, color, false, 0.f, 0, 1.f);
+			}
+		}
+
+		DrawDebugSphere(world, task.location, 40.f, 12, color, false, 0.f, 0, 2.f);
+		DrawDebugString(world, task.location + FVector(0.f, 0.f, 80.f), label, nullptr, color, 0.f, true);
+	}
+#endif
 }

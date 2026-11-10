@@ -232,7 +232,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = GOAPController)
 	TArray<FAtom> getDesiredWorldStateAtoms();
 
+	/** @return Index of the plan step executeGOAP will run next. */
+int32 getPlanStep() const { return planStep; }
+
+/** @return The action executeGOAP is currently on, or nullptr if there is no active step. */
+UGOAPAction* getCurrentAction() const { return plan.IsValidIndex(planStep) ? plan[planStep] : nullptr; }
+
 private:
 	/** Shows the current plan on-screen via GEngine::AddOnScreenDebugMessage, when debug is set. */
 	void debugInfo();
+
+	void drawDebug(int32 level) const;
 };
