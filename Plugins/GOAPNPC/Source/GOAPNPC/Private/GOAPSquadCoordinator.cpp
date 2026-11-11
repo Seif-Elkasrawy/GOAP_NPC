@@ -2,6 +2,7 @@
 #include "GOAPController.h"
 #include "Logging/LogMacros.h"
 #include "DrawDebugHelpers.h"
+#include "VisualLogger/VisualLogger.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogGOAPSquad, Log, All);
 
@@ -111,6 +112,10 @@ void AGOAPSquadCoordinator::AssignTasks()
 			task->assignedTo = best;
 			task->status = ESquadTaskStatus::Assigned;
 
+			UE_VLOG(this, LogGOAPSquad, Log, TEXT("Assigned task (prio %.0f) to %s"), task->priority, *best->GetName());
+			UE_VLOG_SEGMENT(this, LogGOAPSquad, Log, best->GetPawn()->GetActorLocation(), task->location,
+				FColor::Cyan, TEXT("assign %s"), *best->GetName());
+			
 			if (CVarGOAPLogSquad.GetValueOnGameThread())
 			{
 				UE_LOG(LogGOAPSquad, Log, TEXT("Assigned task (priority %.1f, location %s) to agent %s (dist %.1f)"),
@@ -122,6 +127,9 @@ void AGOAPSquadCoordinator::AssignTasks()
 			// Somebody gave up on this task and nobody else is left to try it.
 			task->status = ESquadTaskStatus::Failed;
 			task->failedAtTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+
+			UE_VLOG(this, LogGOAPSquad, Error, TEXT("Task (priority %.1f, location %s) failed: every available agent has given up on it"),
+					task->priority, *task->location.ToString());
 
 			if (CVarGOAPLogSquad.GetValueOnGameThread())
 			{
@@ -147,6 +155,10 @@ void AGOAPSquadCoordinator::CheckTaskCompletion()
 		AGOAPController* agent = task.assignedTo.Get();
 		if (agent == nullptr || agent->GetPawn() == nullptr)
 		{
+
+			UE_VLOG(this, LogGOAPSquad, Warning, TEXT("Task (priority %.1f, location %s) lost its agent - returning to Unassigned"),
+					task.priority, *task.location.ToString());
+			
 			if (CVarGOAPLogSquad.GetValueOnGameThread())
 			{
 				UE_LOG(LogGOAPSquad, Log, TEXT("Task (priority %.1f, location %s) lost its agent - returning to Unassigned"),
@@ -163,6 +175,8 @@ void AGOAPSquadCoordinator::CheckTaskCompletion()
 		TArray<FAtom> currentAtoms = agent->getCurrentWorldStateAtoms();
 		if (IsTaskSatisfied(task.goalAtoms, currentAtoms))
 		{
+			UE_VLOG(this, LogGOAPSquad, Log, TEXT("Task (priority %.1f, location %s) completed by agent %s"), task.priority, *task.location.ToString(), *agent->GetName());
+
 			if (CVarGOAPLogSquad.GetValueOnGameThread())
 			{
 				UE_LOG(LogGOAPSquad, Log, TEXT("Task (priority %.1f, location %s) completed by agent %s"),
@@ -171,10 +185,13 @@ void AGOAPSquadCoordinator::CheckTaskCompletion()
 
 			task.assignedTo.Reset();
 			task.status = ESquadTaskStatus::Completed;
+			continue;
 		}
 
 		if (agent->hasGivenUp())
 		{
+			UE_VLOG(this, LogGOAPSquad, Warning, TEXT("%s gave up on task (prio %.0f), handed back"), *agent->GetName(), task.priority);
+
 			if (CVarGOAPLogSquad.GetValueOnGameThread())
 			{
 				UE_LOG(LogGOAPSquad, Log, TEXT("Agent %s gave up on task (priority %.1f, location %s) - handing it back"),
@@ -209,6 +226,8 @@ void AGOAPSquadCoordinator::RetryFailedTasks()
 			task.excludedAgents.Empty();
 			task.status = ESquadTaskStatus::Unassigned;
 
+			UE_VLOG(this, LogGOAPSquad, Log, TEXT("Retrying failed task (priority %.1f, location %s), attempt %d of %d"), task.priority, *task.location.ToString(), task.retryCount, maxFailedTaskRetries);
+
 			if (CVarGOAPLogSquad.GetValueOnGameThread())
 			{
 				UE_LOG(LogGOAPSquad, Log, TEXT("Retrying failed task (priority %.1f, location %s), attempt %d of %d"),
@@ -237,6 +256,8 @@ void AGOAPSquadCoordinator::BroadcastObjectState()
 		{
 			TArray<FAtom> atoms;
 			atoms.Add(IGOAPBroadcastable::Execute_GetBroadcastAtom(asObject));
+
+			UE_VLOG(this, LogGOAPSquad, Log, TEXT("Broadcasting atom '%s'=true from %s to %d squad member(s)"), *atoms[0].name, *asObject->GetName(), squadMembers.Num());
 
 			if (CVarGOAPLogSquad.GetValueOnGameThread())
 			{

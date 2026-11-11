@@ -7,6 +7,9 @@
  */
 #include "GOAPController.h"
 #include "DrawDebugHelpers.h"
+#include "VisualLogger/VisualLogger.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogGOAPAgent, Log, All);
 
 static TAutoConsoleVariable<bool> CVarGOAPLogStats(
 	TEXT("GOAP.LogStats"),
@@ -211,16 +214,23 @@ bool AGOAPController::executeGOAP()
 		// Effects are applied only on success, changing the current world state.
 		wsCurrentWorld.joinWorldState(aux->getEffects());
 		++planStep;
+		UE_VLOG(GetPawn(), LogGOAPAgent, Log, TEXT("Action %s succeeded"), *aux->GetName());
 		break;
 	case EGOAPActionResult::Failed:
 	{
 		const double now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 		failureMemory.recordFailure(aux, now);
 		++failuresThisGoal;
+		UE_VLOG(GetPawn(), LogGOAPAgent, Warning, TEXT("Action %s FAILED (%d/%d failures)"),
+		*aux->GetName(), failuresThisGoal, maxFailuresPerGoal);
 
 		if (failuresThisGoal >= maxFailuresPerGoal)
 		{
 			bGaveUp = true;
+
+			UE_VLOG(GetPawn(), LogGOAPAgent, Error, TEXT("GAVE UP after %d failures (last: %s)"),
+			failuresThisGoal, *aux->GetName());
+
 			if (CVarGOAPLogActions.GetValueOnGameThread())
 			{
 				UE_LOG(LogTemp, Log, TEXT("GOAP agent %s gave up on its goal after %d failures (last: %s)"),
@@ -263,6 +273,19 @@ bool AGOAPController::generatePlan()
 		lastPlanTimeSeconds = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 		double elapsedMs = (FPlatformTime::Seconds() - startTime) * 1000.0;
 
+		#if ENABLE_VISUAL_LOG
+		if (FVisualLogger::IsRecording())
+		{
+			FString planStr;
+			for (const UGOAPAction* a : plan)
+			{
+				planStr += a->GetName() + TEXT(" > ");
+			}
+			UE_VLOG(GetPawn(), LogGOAPAgent, Log, TEXT("Plan: %d steps, %d expansions, %.2f ms: %s"),
+				plan.Num(), planner->getLastExpansionCount(), elapsedMs, *planStr);
+		}
+		#endif
+
 		if (CVarGOAPLogStats.GetValueOnGameThread())
 		{
 			UE_LOG(LogTemp, Log, TEXT("GOAP benchmark: expansions=%d time=%.4fms"),
@@ -295,6 +318,11 @@ int32 AGOAPController::getPlanRequestCount() const
 void AGOAPController::markPlanDirty(const TCHAR* reason)
 {
 	bPlanDirty = true;
+
+	if (const APawn* pawn = GetPawn())
+	{
+		UE_VLOG(pawn, LogGOAPAgent, Log, TEXT("Replan requested: %s"), reason);
+	}
 
 	if (CVarGOAPLogActions.GetValueOnGameThread())
 	{
