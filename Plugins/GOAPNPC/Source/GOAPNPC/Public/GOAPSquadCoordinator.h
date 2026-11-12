@@ -36,7 +36,6 @@ public:
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
 	TArray<AActor*> broadcastObjects;
-
 	
 	/** Seconds after which a Failed task is retried (excluded agents cleared). 0 = never retry. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
@@ -50,8 +49,19 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
 	int32 maxFailedTaskRetries = 3;
 
+	/** If true, a task with no free agent may take one from a lower-priority task. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
+	bool bEnablePreemption = false;
+
+	/** A task may only preempt a task whose priority is at least this much lower. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
+	float preemptionMargin = 1.f;
+
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void BeginPlay() override;
+
+	UFUNCTION(BlueprintCallable, Category = Squad)
+	void AddTask(const FSquadTask& task);
 
 	AGOAPSquadCoordinator();
 
@@ -100,6 +110,19 @@ private:
 
 	/** @return True if every atom in goalAtoms is present with a matching value in currentAtoms. */
 	bool IsTaskSatisfied(const TArray<FAtom>& goalAtoms, const TArray<FAtom>& currentAtoms) const;
+
+	/**
+	 * Finds an agent to take from a lower-priority task for newTask. Candidates are
+	 * agents on Assigned tasks at least preemptionMargin lower in priority, excluding
+	 * agents that already gave up, agents whose goal is already satisfied, and agents
+	 * excluded from newTask. Picks the lowest priority first, then the nearest to
+	 * newTask's location.
+	 *
+	 * @param newTask The task that needs an agent.
+	 * @param outVictimTask Set to the victim's task, or nullptr if none was found.
+	 * @return The agent to take, or nullptr if there is no valid victim.
+	 */
+	AGOAPController* FindPreemptionVictim(const FSquadTask& newTask, FSquadTask*& outVictimTask);
 
 	void drawDebug() const;
 };

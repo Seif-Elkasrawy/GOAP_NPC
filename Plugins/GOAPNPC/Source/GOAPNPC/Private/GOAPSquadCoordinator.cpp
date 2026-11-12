@@ -56,6 +56,11 @@ void AGOAPSquadCoordinator::Tick(float DeltaSeconds)
 #endif
 }
 
+void AGOAPSquadCoordinator::AddTask(const FSquadTask& task)
+{
+	tasks.Add(task);
+}
+
 void AGOAPSquadCoordinator::AssignTasks()
 {
 	// Highest priority first.
@@ -103,6 +108,26 @@ void AGOAPSquadCoordinator::AssignTasks()
 			{
 				bestDistSq = distSq;
 				best = controller;
+			}
+		}
+
+		if (best == nullptr && bEnablePreemption && eligibleAgents > 0)
+		{
+			FSquadTask* victimTask = nullptr;
+			best = FindPreemptionVictim(*task, victimTask);
+			if (best != nullptr)
+			{
+				bestDistSq = FVector::DistSquared(task->location, best->GetPawn()->GetActorLocation());
+				UE_VLOG(this, LogGOAPSquad, Warning, TEXT("Preempted %s from task (prio %.0f) for task (prio %.0f)"),
+					*best->GetName(), victimTask->priority, task->priority);
+
+				if (CVarGOAPLogSquad.GetValueOnGameThread())
+				{
+					UE_LOG(LogGOAPSquad, Log, TEXT("Preempted agent %s from task (priority %.1f) for task (priority %.1f)"),
+						*best->GetName(), victimTask->priority, task->priority);
+				}
+				victimTask->assignedTo.Reset();
+				victimTask->status = ESquadTaskStatus::Unassigned;
 			}
 		}
 
@@ -286,6 +311,42 @@ bool AGOAPSquadCoordinator::IsTaskSatisfied(const TArray<FAtom>& goalAtoms, cons
 			return false;
 	}
 	return true;
+}
+
+AGOAPController* AGOAPSquadCoordinator::FindPreemptionVictim(const FSquadTask& newTask, FSquadTask*& outVictimTask)
+{
+	outVictimTask = nullptr;
+	AGOAPController* victimAgent = nullptr;
+	float lowestPriority = TNumericLimits<float>::Max();
+	float bestDistSq = TNumericLimits<float>::Max();
+
+	for (FSquadTask& candidate : tasks)
+	{
+		if (candidate.status != ESquadTaskStatus::Assigned)
+			continue;
+		if (candidate.priority + preemptionMargin > newTask.priority)
+			continue; // not low enough to take an agent from
+
+		AGOAPController* agent = candidate.assignedTo.Get();
+		if (agent == nullptr || agent->GetPawn() == nullptr)
+			continue;
+		if (agent->hasGivenUp())
+			continue; // a handback is already pending
+		if (newTask.excludedAgents.ContainsByPredicate([agent](const TWeakObjectPtr<AGOAPController>& w) { return w.Get() == agent; }))
+			continue;
+		if (IsTaskSatisfied(candidate.goalAtoms, agent->getCurrentWorldStateAtoms()))
+			continue; // already done, completion will be credited this tick
+
+		const float distSq = FVector::DistSquared(newTask.location, agent->GetPawn()->GetActorLocation());
+		if (candidate.priority < lowestPriority || (candidate.priority == lowestPriority && distSq < bestDistSq))
+		{
+			lowestPriority = candidate.priority;
+			bestDistSq = distSq;
+			victimAgent = agent;
+			outVictimTask = &candidate;
+		}
+	}
+	return victimAgent;
 }
 
 void AGOAPSquadCoordinator::drawDebug() const

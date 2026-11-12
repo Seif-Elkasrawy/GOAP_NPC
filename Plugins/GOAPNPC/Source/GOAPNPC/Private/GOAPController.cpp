@@ -375,6 +375,7 @@ bool AGOAPController::hasGivenUp() const
 void AGOAPController::setGoal(const TArray<FAtom>& newGoal)
 {
 	wsDesiredWorld.cleanAtoms();
+	StopMovement();  // a new goal discards the old plan, stop walking toward its target
 	lastActionResult = EGOAPActionResult::InProgress; // A new goal clears the previous task's result.
 	failureMemory.clear();
 	failuresThisGoal = 0;
