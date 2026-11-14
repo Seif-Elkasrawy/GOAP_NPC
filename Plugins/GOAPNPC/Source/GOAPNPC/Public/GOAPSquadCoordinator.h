@@ -7,6 +7,7 @@
 #include "GOAPSquadCoordinator.generated.h"
 
 class AGOAPController;
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnObjectiveCompleted, FName, ObjectiveName);
 
 /**
  * Owns a designer-authored list of tasks and a squad of agents, and
@@ -26,7 +27,13 @@ public:
 	TArray<FSquadTask> tasks;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
+	TArray<FSquadObjective> objectives;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Squad)
 	TArray<APawn*> squadMembers;
+
+	UPROPERTY(BlueprintAssignable, Category = Squad)
+	FOnObjectiveCompleted OnObjectiveCompleted;
 
 	/**
 	 * Any objects the coordinator should watch and, once each reports
@@ -90,6 +97,13 @@ private:
 	 * is added to its excludedAgents so it is not handed straight back.
 	 */
 	void CheckTaskCompletion();
+
+	/**
+	 * Checks each objective against its required tasks. An objective whose
+	 * required tasks are all complete is marked complete and the
+	 * OnObjectiveCompleted event is broadcast.
+	 */
+	void CheckObjectiveCompletion();
 
 	/**
 	 * Retries Failed tasks once failedTaskRetryCooldown has passed since

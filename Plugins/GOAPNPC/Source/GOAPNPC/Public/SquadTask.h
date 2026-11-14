@@ -15,10 +15,21 @@ enum class ESquadTaskStatus : uint8
 	Failed
 };
 
+UENUM(BlueprintType)
+enum class ESquadObjectiveStatus : uint8
+{
+	InProgress,
+	Completed,
+	Failed
+};
+
 USTRUCT(BlueprintType)
 struct FSquadTask
 {
 	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadTask)
+	FName taskName;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadTask)
 	TArray<FAtom> goalAtoms;
@@ -53,4 +64,23 @@ struct FSquadTask
 
 	UPROPERTY()
 	ESquadTaskStatus status = ESquadTaskStatus::Unassigned;
+};
+
+USTRUCT(BlueprintType)
+struct FSquadObjective
+{
+	GENERATED_BODY()
+
+	// TODO 3: authored name of the objective
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadObjective)
+	FName objectiveName;
+	// TODO 4: authored list of the task names that must all complete
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadObjective)
+	TArray<FName> requiredTasks;
+	// TODO 5: runtime-only status, default = the starting state
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadObjective)
+	ESquadObjectiveStatus status = ESquadObjectiveStatus::InProgress;
+	// TODO 6: runtime-only count of completed required tasks
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = SquadObjective)
+	int32 completedTasks = 0;
 };

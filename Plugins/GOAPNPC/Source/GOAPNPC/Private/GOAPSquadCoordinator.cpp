@@ -36,6 +36,18 @@ void AGOAPSquadCoordinator::BeginPlay()
 		UE_LOG(LogGOAPSquad, Warning, TEXT("  broadcastObjects[%d] = %s"),
 			i, broadcastObjects[i] != nullptr ? *broadcastObjects[i]->GetName() : TEXT("NULL"));
 	}
+
+	for (const FSquadObjective& objective : objectives)
+	{
+		for (const FName& name : objective.requiredTasks)
+		{
+			if (!tasks.ContainsByPredicate([&name](const FSquadTask& t) { return t.taskName == name; }))
+			{
+				UE_LOG(LogGOAPSquad, Warning, TEXT("Objective '%s' lists task '%s', which does not exist"),
+					*objective.objectiveName.ToString(), *name.ToString());
+			}
+		}
+	}
 }
 
 void AGOAPSquadCoordinator::Tick(float DeltaSeconds)
@@ -44,6 +56,7 @@ void AGOAPSquadCoordinator::Tick(float DeltaSeconds)
 	RetryFailedTasks();
 	AssignTasks();
 	CheckTaskCompletion();
+	CheckObjectiveCompletion();
 	BroadcastObjectState();
 
 #if ENABLE_DRAW_DEBUG
@@ -230,6 +243,62 @@ void AGOAPSquadCoordinator::CheckTaskCompletion()
 	}
 }
 
+void AGOAPSquadCoordinator::CheckObjectiveCompletion()
+{
+	for (FSquadObjective& objective : objectives)
+	{
+		if (objective.status != ESquadObjectiveStatus::InProgress)
+			continue;
+		
+		int32 completedCount = 0;
+		bool permanentlyFailed = false;
+
+		for (const FName& name : objective.requiredTasks)
+		{
+			const FSquadTask* task = tasks.FindByPredicate([&name](const FSquadTask& t) { return t.taskName == name; });
+			if (task == nullptr)
+				continue; // unknown name: never counts as completed
+			
+			if (task->status == ESquadTaskStatus::Completed)
+				++completedCount;
+			else if (task->status == ESquadTaskStatus::Failed && (failedTaskRetryCooldown <= 0.f || task->retryCount >= maxFailedTaskRetries))
+				permanentlyFailed = true;
+		}
+
+		
+		if (objective.completedTasks != completedCount)
+		{
+			UE_VLOG(this, LogGOAPSquad, Log, TEXT("Objective '%s' progress %d/%d"), *objective.objectiveName.ToString(), completedCount, objective.requiredTasks.Num());
+		}
+
+		objective.completedTasks = completedCount;
+
+		if (objective.requiredTasks.Num() > 0 && completedCount == objective.requiredTasks.Num())
+		{
+			objective.status = ESquadObjectiveStatus::Completed;
+			UE_VLOG(this, LogGOAPSquad, Log, TEXT("Objective '%s' COMPLETED (%d/%d tasks)"),
+				*objective.objectiveName.ToString(), completedCount, objective.requiredTasks.Num());
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Objective '%s' completed (%d/%d tasks)"),
+					*objective.objectiveName.ToString(), completedCount, objective.requiredTasks.Num());
+			}
+			OnObjectiveCompleted.Broadcast(objective.objectiveName);
+		}
+		else if (permanentlyFailed)
+		{
+			objective.status = ESquadObjectiveStatus::Failed;
+			UE_VLOG(this, LogGOAPSquad, Error, TEXT("Objective '%s' FAILED: a required task failed for good"),
+				*objective.objectiveName.ToString());
+			if (CVarGOAPLogSquad.GetValueOnGameThread())
+			{
+				UE_LOG(LogGOAPSquad, Log, TEXT("Objective '%s' failed: a required task failed for good"),
+					*objective.objectiveName.ToString());
+			}
+		}
+	}
+}
+
 void AGOAPSquadCoordinator::RetryFailedTasks()
 {
 	if (failedTaskRetryCooldown <= 0.f)
@@ -383,6 +452,18 @@ void AGOAPSquadCoordinator::drawDebug() const
 
 		DrawDebugSphere(world, task.location, 40.f, 12, color, false, 0.f, 0, 2.f);
 		DrawDebugString(world, task.location + FVector(0.f, 0.f, 80.f), label, nullptr, color, 0.f, true);
+	}
+
+	if (GEngine)
+	{
+		for (int32 i = 0; i < objectives.Num(); ++i)
+		{
+			const FSquadObjective& obj = objectives[i];
+			const FColor objColor = obj.status == ESquadObjectiveStatus::Completed ? FColor::Green :
+				obj.status == ESquadObjectiveStatus::Failed ? FColor::Red : FColor::White;
+			GEngine->AddOnScreenDebugMessage(2000 + i, 0.f, objColor,
+				FString::Printf(TEXT("Objective %s: %d/%d tasks"), *obj.objectiveName.ToString(), obj.completedTasks, obj.requiredTasks.Num()));
+		}
 	}
 #endif
 }
